@@ -101,20 +101,6 @@ function getPaymentMethod(payment: any) {
   );
 }
 
-function getPaymentCard(payment: any) {
-  const card = payment.method_details?.card;
-
-  if (!card) return "unknown";
-
-  return [
-    card.type,
-    card.brand,
-    card.last4 ? `**** ${card.last4}` : null,
-  ]
-    .filter(Boolean)
-    .join(" ");
-}
-
 function getFailureReason(payment: any, data: any) {
   const code =
     payment.error_code ||
@@ -179,19 +165,17 @@ async function resolveCountry(data: any) {
 function buildPaymentMessage(title: string, details: Record<string, unknown>) {
   return `<b>${title}</b>
 
-<b>Website:</b> ${tg(details.website)}
-<b>Email:</b> ${tg(details.email)}
-<b>Product:</b> ${tg(details.product)}
-<b>Amount:</b> ${tg(details.amount)} ${tg(details.currency)}
-<b>Payment method:</b> ${tg(details.paymentMethod)}
-<b>Card:</b> ${tg(details.paymentCard)}
-<b>Payment status:</b> ${tg(details.paymentStatus)}
-<b>Country:</b> ${tg(details.country)}
-${details.errorCode ? `<b>Error code:</b> ${tg(details.errorCode)}
-<b>Error reason:</b> ${tg(details.errorReason)}
-` : ""}<b>Transaction ID:</b> ${tg(details.transactionId)}
-<b>Customer ID:</b> ${tg(details.customerId)}
-<b>Date:</b> ${tg(details.date)}`;
+🌐 <b>Website:</b> ${tg(details.website)}
+
+👤 <b>Email:</b> ${tg(details.email)}
+📦 <b>Product:</b> ${tg(details.product)}
+💰 <b>Amount:</b> ${tg(details.amount)} ${tg(details.currency)}
+💳 <b>Payment:</b> ${tg(details.paymentMethod)}
+🌍 <b>Country:</b> ${tg(details.country)}
+${details.errorCode ? `⚠️ <b>Error:</b> ${tg(details.errorCode)}
+📝 <b>Reason:</b> ${tg(details.errorReason)}
+` : ""}🧾 <b>ID:</b> ${tg(details.transactionId)}
+🕒 <b>Date:</b> ${tg(details.date)}`;
 }
 
 export async function POST(req: Request) {
@@ -254,11 +238,9 @@ export async function POST(req: Request) {
       amount: getAmount(data),
       currency: data.currency_code || data.details?.totals?.currency_code || "EUR",
       paymentMethod: getPaymentMethod(payment),
-      paymentCard: getPaymentCard(payment),
       paymentStatus: payment.status || data.status || "unknown",
       country,
       transactionId: data.id || "unknown",
-      customerId: data.customer_id || data.customer?.id || "unknown",
       date: new Date().toLocaleString("en-GB"),
     };
 
