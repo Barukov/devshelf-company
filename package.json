@@ -1,0 +1,25 @@
+{
+  "name": "holytime-final-2",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@mollie/api-client": "latest",
+    "@tailwindcss/postcss": "^4.2.4",
+    "@types/node": "^20.19.42",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "resend": "^6.12.2"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.14",
+    "autoprefixer": "^10.5.0",
+    "postcss": "^8.5.13",
+    "tailwindcss": "^4.2.4",
+    "typescript": "latest"
+  }
+}
