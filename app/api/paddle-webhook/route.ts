@@ -65,6 +65,20 @@ const PAYMENT_ERROR_MESSAGES: Record<string, string> = {
 };
 
 const processedEvents = new Set<string>();
+const processedTransactions = new Set<string>();
+
+function normalizeSourceDomain(value: unknown) {
+  return String(value || "")
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .split("/")[0]
+    .toLowerCase();
+}
+
+function shouldProcessSourceDomain(sourceDomain: string) {
+  const domain = normalizeSourceDomain(sourceDomain);
+  return domain === "holytime.auction";
+}
 
 function verifyPaddleSignature(rawBody: string, signature: string, secret: string) {
   try {
@@ -235,6 +249,28 @@ export async function POST(req: Request) {
 
     processedEvents.add(eventId);
 
+    const sourceDomain = data.custom_data?.sourceDomain || req.headers.get("host") || "holytime.auction";
+
+    if (!shouldProcessSourceDomain(sourceDomain)) {
+      console.log("IGNORED SOURCE DOMAIN:", sourceDomain);
+      return new Response("OK", { status: 200 });
+    }
+
+    const transactionEventId = `${eventType}_${data.id || "unknown"}`;
+
+    if (
+      data.id &&
+      (eventType === "transaction.payment_failed" || eventType === "transaction.completed") &&
+      processedTransactions.has(transactionEventId)
+    ) {
+      console.log("DUPLICATE TRANSACTION EVENT:", transactionEventId);
+      return new Response("OK", { status: 200 });
+    }
+
+    if (data.id && (eventType === "transaction.payment_failed" || eventType === "transaction.completed")) {
+      processedTransactions.add(transactionEventId);
+    }
+
     const customData = data.custom_data || {};
     const productId = customData.productId || "advanced";
     const payment = latestPayment(data.payments);
@@ -242,7 +278,7 @@ export async function POST(req: Request) {
     const country = await resolveCountry(data);
 
     const details = {
-      website: customData.sourceDomain || req.headers.get("host") || "holytime.auction",
+      website: sourceDomain,
       email: data.customer?.email || data.customer_email || customData.email || "unknown",
       product:
         PRODUCT_NAMES[productId] ||
