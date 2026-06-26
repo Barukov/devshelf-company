@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import crypto from "crypto";
+import { sendDesk1TelegramMessage } from "../../lib/telegram";
 
 export const runtime = "nodejs";
 
@@ -58,29 +59,7 @@ function verifyPaddleSignature(rawBody: string, signature: string, secret: strin
 }
 
 async function sendTelegram(text: string, sourceDomain: string) {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN;
-
-  if (!botToken) {
-    console.log("NO TELEGRAM_BOT_TOKEN");
-    return;
-  }
-
-  const chatId = sourceDomain.includes("holytime.business")
-    ? "-1003983054033"
-    : "-1003808961913";
-
-  const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-      parse_mode: "HTML",
-    }),
-  });
-
-  const tgText = await res.text();
-  console.log("TG RESPONSE:", tgText);
+  await sendDesk1TelegramMessage(text);
 }
 
 export async function POST(req: Request) {

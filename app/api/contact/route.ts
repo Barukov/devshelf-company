@@ -1,11 +1,20 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
+import { sendDesk1TelegramMessage, tg } from "../../lib/telegram";
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
 
 export async function POST(req: Request) {
   try {
     const { name, email, message } = await req.json();
+
+    await sendDesk1TelegramMessage(`<b>New Holytime support request</b>
+
+<b>Name:</b> ${tg(name)}
+<b>Email:</b> ${tg(email)}
+
+<b>Message:</b>
+${tg(message)}`);
 
     await resend.emails.send({
     from: "Holytime <support@holytime.auction>",
