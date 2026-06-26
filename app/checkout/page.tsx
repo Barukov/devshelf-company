@@ -15,7 +15,7 @@ declare global {
   }
 }
 
-const PADDLE_CLIENT_TOKEN = "live_c0bb423aebbbe5671abf6d87cd4";
+const PADDLE_CLIENT_TOKEN = "live_975d78a2f44244615e61b0e393b";
 
 export default function CheckoutPage() {
   const [scriptLoaded, setScriptLoaded] = useState(false);
