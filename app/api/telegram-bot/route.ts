@@ -5,7 +5,7 @@ const TIME_ZONE = "Europe/Kyiv";
 const DESK1_CHAT_ID = process.env.TELEGRAM_DESK1_CHAT_ID || "-1003983054033";
 const SUCCESS_STATUSES = new Set(["completed", "billed", "paid"]);
 const BALANCE_REPORT_START = "2020-01-01";
-const FRESH_REPORT_MAX_AGE_MS = 10 * 60 * 1000;
+const FRESH_REPORT_MAX_AGE_MS = 2 * 60 * 1000;
 
 type StatsAccount = {
   apiKey: string;
@@ -329,13 +329,17 @@ Repeat /balance in about 1 minute.`;
 
     const rows = parseCsv(await downloadReportCsv(account.apiKey, report.id));
     const totals = new Map<string, number>();
+    let openRows = 0;
 
     for (const row of rows) {
+      if (row.payout_id) continue;
+
       const currency = row.balance_currency_code || "USD";
       const amount = Number(row.balance_amount || 0);
       const direction = String(row.direction || "").toLowerCase();
       const signedAmount = direction === "out" ? -amount : amount;
 
+      openRows += 1;
       totals.set(currency, (totals.get(currency) || 0) + signedAmount);
     }
 
@@ -347,7 +351,7 @@ Repeat /balance in about 1 minute.`;
     return `<b>${tg(account.title)} - Balance</b>
 
 Currently in Paddle balance: <b>${tg(totalText)}</b>
-Balance movements: <b>${tg(rows.length)}</b>`;
+Open balance movements: <b>${tg(openRows)}</b>`;
   } catch (error) {
     return `<b>${tg(account.title)} - Balance</b>
 
