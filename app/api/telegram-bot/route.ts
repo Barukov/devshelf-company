@@ -45,16 +45,6 @@ function kyivDateKey(value: string | null | undefined) {
   }).format(new Date(value));
 }
 
-function kyivMonthKey(value: string | null | undefined) {
-  if (!value) return "";
-
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-  }).format(new Date(value));
-}
-
 function formatMoney(amount: unknown, currency: unknown) {
   const value = Number(amount || 0) / 100;
   return `${value.toFixed(2)} ${String(currency || "EUR")}`;
@@ -149,14 +139,13 @@ async function fetchTodayTransactions(apiKey: string) {
   return transactions;
 }
 
-async function fetchCurrentMonthTransactions(apiKey: string) {
+async function fetchAllSuccessfulTransactions(apiKey: string) {
   if (!apiKey) return [];
 
-  const month = kyivMonthKey(new Date().toISOString());
   let url = "https://api.paddle.com/transactions?per_page=100&order_by=created_at[DESC]";
   const transactions: any[] = [];
 
-  for (let page = 0; page < 10 && url; page += 1) {
+  for (let page = 0; page < 200 && url; page += 1) {
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${apiKey}` },
       cache: "no-store",
@@ -168,16 +157,12 @@ async function fetchCurrentMonthTransactions(apiKey: string) {
     const pageTransactions = Array.isArray(json.data) ? json.data : [];
 
     for (const transaction of pageTransactions) {
-      const dateForReport = transaction.billed_at || transaction.created_at;
       const status = String(transaction.status || "").toLowerCase();
 
-      if (kyivMonthKey(dateForReport) === month && SUCCESS_STATUSES.has(status)) {
+      if (SUCCESS_STATUSES.has(status)) {
         transactions.push(transaction);
       }
     }
-
-    const oldest = pageTransactions[pageTransactions.length - 1];
-    if (oldest && kyivMonthKey(oldest.created_at) !== month) break;
 
     url = json.meta?.pagination?.has_more ? json.meta.pagination.next : "";
   }
@@ -219,7 +204,7 @@ ${body}`;
 }
 
 async function buildBalanceReport(account: StatsAccount) {
-  const transactions = await fetchCurrentMonthTransactions(account.apiKey);
+  const transactions = await fetchAllSuccessfulTransactions(account.apiKey);
   const totals = new Map<string, number>();
 
   for (const transaction of transactions) {
@@ -232,15 +217,9 @@ async function buildBalanceReport(account: StatsAccount) {
       .map(([currency, amount]) => formatMoney(amount, currency))
       .join(", ") || "0.00 EUR";
 
-  const month = new Intl.DateTimeFormat("en-GB", {
-    timeZone: TIME_ZONE,
-    month: "long",
-    year: "numeric",
-  }).format(new Date());
-
   return `<b>${tg(account.title)} - Balance</b>
 
-Full balance for ${tg(month)} after Paddle fee: <b>${tg(totalText)}</b>
+Full balance after Paddle fee: <b>${tg(totalText)}</b>
 Successful payments: <b>${tg(transactions.length)}</b>`;
 }
 
