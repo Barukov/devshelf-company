@@ -12,6 +12,9 @@ type StatsAccount = {
   balanceBaseAmount: number;
   balanceBaseCurrency: string;
   balanceBaseCutoffIso: string;
+  successfulPaymentsBaseCount: number;
+  refundsAllTimeAmount: number;
+  refundsAllTimeCurrency: string;
 };
 
 function tg(value: unknown) {
@@ -32,6 +35,9 @@ function getAccountForChat(chatId: unknown): StatsAccount {
       balanceBaseAmount: Number(process.env.PADDLE_DESK1_BALANCE_BASE_AMOUNT || 4568.82),
       balanceBaseCurrency: process.env.PADDLE_DESK1_BALANCE_BASE_CURRENCY || "USD",
       balanceBaseCutoffIso: process.env.PADDLE_DESK1_BALANCE_BASE_CUTOFF_ISO || DEFAULT_BALANCE_BASE_CUTOFF_ISO,
+      successfulPaymentsBaseCount: Number(process.env.PADDLE_DESK1_SUCCESSFUL_PAYMENTS_BASE_COUNT || 21),
+      refundsAllTimeAmount: Number(process.env.PADDLE_DESK1_REFUNDS_ALL_TIME_AMOUNT || 0),
+      refundsAllTimeCurrency: process.env.PADDLE_DESK1_REFUNDS_ALL_TIME_CURRENCY || "USD",
     };
   }
 
@@ -41,6 +47,9 @@ function getAccountForChat(chatId: unknown): StatsAccount {
     balanceBaseAmount: Number(process.env.PADDLE_DESK2_BALANCE_BASE_AMOUNT || 60845.43),
     balanceBaseCurrency: process.env.PADDLE_DESK2_BALANCE_BASE_CURRENCY || "USD",
     balanceBaseCutoffIso: process.env.PADDLE_DESK2_BALANCE_BASE_CUTOFF_ISO || DEFAULT_BALANCE_BASE_CUTOFF_ISO,
+    successfulPaymentsBaseCount: Number(process.env.PADDLE_DESK2_SUCCESSFUL_PAYMENTS_BASE_COUNT || 342),
+    refundsAllTimeAmount: Number(process.env.PADDLE_DESK2_REFUNDS_ALL_TIME_AMOUNT || 5113.69),
+    refundsAllTimeCurrency: process.env.PADDLE_DESK2_REFUNDS_ALL_TIME_CURRENCY || "USD",
   };
 }
 
@@ -322,12 +331,15 @@ Paddle API key is missing.`;
       [...totals.entries()]
         .map(([currency, amount]) => formatDecimalMoney(amount, currency))
         .join(", ") || "0.00 USD";
+    const successfulAllTime = account.successfulPaymentsBaseCount + transactions.length;
+    const refundsText = account.refundsAllTimeAmount
+      ? `\nRefunds all time: <b>${tg(formatDecimalMoney(account.refundsAllTimeAmount, account.refundsAllTimeCurrency))}</b>`
+      : "";
 
     return `<b>${tg(account.title)} - Balance</b>
 
 Currently in Paddle balance: <b>${tg(totalText)}</b>
-New successful payments: <b>${tg(transactions.length)}</b>
-New refunds/chargebacks: <b>${tg(adjustments.length)}</b>`;
+New successful payments: <b>${tg(successfulAllTime)}</b>${refundsText}`;
   } catch (error) {
     return `<b>${tg(account.title)} - Balance</b>
 
