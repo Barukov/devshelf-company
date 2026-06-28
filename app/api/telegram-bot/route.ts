@@ -4,8 +4,6 @@ export const dynamic = "force-dynamic";
 const TIME_ZONE = "Europe/Kyiv";
 const DESK1_CHAT_ID = process.env.TELEGRAM_DESK1_CHAT_ID || "-1003983054033";
 const SUCCESS_STATUSES = new Set(["completed", "billed", "paid"]);
-const BALANCE_REPORT_START = "2020-01-01";
-const FRESH_REPORT_MAX_AGE_MS = 2 * 60 * 1000;
 const DEFAULT_BALANCE_BASE_CUTOFF_ISO = "2026-06-28T16:44:06Z";
 
 type StatsAccount = {
@@ -66,16 +64,16 @@ function formatDecimalMoney(amount: unknown, currency: unknown) {
   return `${Number(amount || 0).toFixed(2)} ${String(currency || "USD")}`;
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function parsePaddleDate(value: unknown) {
   const normalized = String(value || "")
     .replace(" ", "T")
     .replace(" Z", "Z");
 
   return new Date(normalized);
+}
+
+function minorToMajor(amount: unknown) {
+  return Number(amount || 0) / 100;
 }
 
 function transactionNetAmount(transaction: any) {
@@ -167,6 +165,101 @@ async function fetchTodayTransactions(apiKey: string) {
   return transactions;
 }
 
+async function paddleGet(apiKey: string, path: string) {
+  const res = await fetch(`https://api.paddle.com${path}`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(`Paddle API error ${res.status}`);
+  }
+
+  return res.json();
+}
+
+async function fetchNewSuccessfulTransactions(apiKey: string, cutoff: Date) {
+  if (!apiKey) return [];
+
+  let url = "/transactions?per_page=100&order_by=created_at[DESC]";
+  const transactions: any[] = [];
+
+  for (let page = 0; page < 20 && url; page += 1) {
+    const json = await paddleGet(apiKey, url);
+    const pageTransactions = Array.isArray(json.data) ? json.data : [];
+
+    for (const transaction of pageTransactions) {
+      const dateForBalance = parsePaddleDate(transaction.billed_at || transaction.updated_at || transaction.created_at);
+      const status = String(transaction.status || "").toLowerCase();
+
+      if (dateForBalance > cutoff && SUCCESS_STATUSES.has(status)) {
+        transactions.push(transaction);
+      }
+    }
+
+    const oldest = pageTransactions[pageTransactions.length - 1];
+    if (oldest && parsePaddleDate(oldest.created_at) <= cutoff) break;
+
+    url = json.meta?.pagination?.has_more ? json.meta.pagination.next : "";
+  }
+
+  return transactions;
+}
+
+function adjustmentSign(adjustment: any) {
+  const action = String(adjustment.action || adjustment.type || "").toLowerCase();
+
+  if (action.includes("reverse")) return 1;
+  if (action.includes("refund") || action.includes("chargeback") || action.includes("credit")) return -1;
+
+  return -1;
+}
+
+function adjustmentNetAmount(adjustment: any) {
+  const payoutTotals = adjustment.payout_totals || adjustment.adjusted_payout_totals;
+  const totals = adjustment.totals || adjustment.adjusted_totals;
+  const amount =
+    payoutTotals?.earnings ??
+    payoutTotals?.total ??
+    totals?.earnings ??
+    totals?.grand_total ??
+    totals?.total ??
+    0;
+
+  return {
+    amount: adjustmentSign(adjustment) * Math.abs(Number(amount || 0)),
+    currency: payoutTotals?.currency_code || totals?.currency_code || adjustment.currency_code || "USD",
+  };
+}
+
+async function fetchNewBalanceAdjustments(apiKey: string, cutoff: Date) {
+  if (!apiKey) return [];
+
+  let url = "/adjustments?per_page=50";
+  const adjustments: any[] = [];
+
+  for (let page = 0; page < 20 && url; page += 1) {
+    const json = await paddleGet(apiKey, url);
+    const pageAdjustments = Array.isArray(json.data) ? json.data : [];
+
+    for (const adjustment of pageAdjustments) {
+      const dateForBalance = parsePaddleDate(adjustment.updated_at || adjustment.created_at);
+      const status = String(adjustment.status || "").toLowerCase();
+
+      if (dateForBalance > cutoff && (!status || status === "approved" || status === "reversed")) {
+        adjustments.push(adjustment);
+      }
+    }
+
+    const oldest = pageAdjustments[pageAdjustments.length - 1];
+    if (oldest && parsePaddleDate(oldest.created_at) <= cutoff) break;
+
+    url = json.meta?.pagination?.has_more ? json.meta.pagination.next : "";
+  }
+
+  return adjustments;
+}
+
 async function buildTodayReport(account: StatsAccount) {
   const transactions = await fetchTodayTransactions(account.apiKey);
   const totals = new Map<string, number>();
@@ -200,134 +293,6 @@ ${body}`;
   return report.length > 3900 ? `${report.slice(0, 3800)}\n\n...truncated` : report;
 }
 
-function parseCsv(text: string) {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let cell = "";
-  let quoted = false;
-
-  for (let i = 0; i < text.length; i += 1) {
-    const char = text[i];
-    const next = text[i + 1];
-
-    if (char === "\"" && quoted && next === "\"") {
-      cell += "\"";
-      i += 1;
-      continue;
-    }
-
-    if (char === "\"") {
-      quoted = !quoted;
-      continue;
-    }
-
-    if (char === "," && !quoted) {
-      row.push(cell);
-      cell = "";
-      continue;
-    }
-
-    if ((char === "\n" || char === "\r") && !quoted) {
-      if (char === "\r" && next === "\n") i += 1;
-      row.push(cell);
-      rows.push(row);
-      row = [];
-      cell = "";
-      continue;
-    }
-
-    cell += char;
-  }
-
-  if (cell || row.length) {
-    row.push(cell);
-    rows.push(row);
-  }
-
-  const [header = [], ...data] = rows;
-
-  return data
-    .filter((values) => values.some(Boolean))
-    .map((values) =>
-      Object.fromEntries(header.map((name, index) => [name, values[index] || ""])),
-    );
-}
-
-async function paddleGet(apiKey: string, path: string) {
-  const res = await fetch(`https://api.paddle.com${path}`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-    cache: "no-store",
-  });
-
-  if (!res.ok) {
-    throw new Error(`Paddle API error ${res.status}`);
-  }
-
-  return res.json();
-}
-
-async function paddlePost(apiKey: string, path: string, body: unknown) {
-  const res = await fetch(`https://api.paddle.com${path}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-    cache: "no-store",
-  });
-
-  if (!res.ok) {
-    throw new Error(`Paddle API error ${res.status}`);
-  }
-
-  return res.json();
-}
-
-async function getFreshBalanceReport(apiKey: string) {
-  const reports = await paddleGet(apiKey, "/reports?per_page=20&order_by=created_at[DESC]");
-  const now = Date.now();
-  const fresh = (Array.isArray(reports.data) ? reports.data : []).find((report: any) => {
-    const age = now - new Date(report.created_at || 0).getTime();
-    return report.type === "balance" && age >= 0 && age <= FRESH_REPORT_MAX_AGE_MS && report.status !== "expired";
-  });
-
-  if (fresh) return fresh;
-
-  const created = await paddlePost(apiKey, "/reports", {
-    type: "balance",
-    filters: [{ name: "updated_at", operator: "gte", value: BALANCE_REPORT_START }],
-  });
-
-  return created.data;
-}
-
-async function waitForReadyReport(apiKey: string, report: any) {
-  let current = report;
-
-  for (let attempt = 0; attempt < 14; attempt += 1) {
-    if (current?.status === "ready") return current;
-    if (current?.status === "failed" || current?.status === "expired") return current;
-
-    await sleep(2500);
-    const refreshed = await paddleGet(apiKey, `/reports/${current.id}`);
-    current = refreshed.data;
-  }
-
-  return current;
-}
-
-async function downloadReportCsv(apiKey: string, reportId: string) {
-  const link = await paddleGet(apiKey, `/reports/${reportId}/download-url`);
-  const res = await fetch(link.data?.url, { cache: "no-store" });
-
-  if (!res.ok) {
-    throw new Error(`Report download error ${res.status}`);
-  }
-
-  return res.text();
-}
-
 async function buildBalanceReport(account: StatsAccount) {
   if (!account.apiKey) {
     return `<b>${tg(account.title)} - Balance</b>
@@ -336,33 +301,21 @@ Paddle API key is missing.`;
   }
 
   try {
-    const report = await waitForReadyReport(account.apiKey, await getFreshBalanceReport(account.apiKey));
-
-    if (report.status !== "ready") {
-      return `<b>${tg(account.title)} - Balance</b>
-
-Paddle is preparing the real balance report.
-Repeat /balance in about 1 minute.`;
-    }
-
-    const rows = parseCsv(await downloadReportCsv(account.apiKey, report.id));
     const totals = new Map<string, number>();
     const cutoff = new Date(account.balanceBaseCutoffIso);
-    let newRows = 0;
+    const transactions = await fetchNewSuccessfulTransactions(account.apiKey, cutoff);
+    const adjustments = await fetchNewBalanceAdjustments(account.apiKey, cutoff);
 
     totals.set(account.balanceBaseCurrency, account.balanceBaseAmount);
 
-    for (const row of rows) {
-      if (row.payout_id) continue;
-      if (parsePaddleDate(row.updated_at) <= cutoff) continue;
+    for (const transaction of transactions) {
+      const { amount, currency } = transactionNetAmount(transaction);
+      totals.set(currency, (totals.get(currency) || 0) + minorToMajor(amount));
+    }
 
-      const currency = row.balance_currency_code || "USD";
-      const amount = Number(row.balance_amount || 0);
-      const direction = String(row.direction || "").toLowerCase();
-      const signedAmount = direction === "out" ? -amount : amount;
-
-      newRows += 1;
-      totals.set(currency, (totals.get(currency) || 0) + signedAmount);
+    for (const adjustment of adjustments) {
+      const { amount, currency } = adjustmentNetAmount(adjustment);
+      totals.set(currency, (totals.get(currency) || 0) + minorToMajor(amount));
     }
 
     const totalText =
@@ -373,7 +326,8 @@ Repeat /balance in about 1 minute.`;
     return `<b>${tg(account.title)} - Balance</b>
 
 Currently in Paddle balance: <b>${tg(totalText)}</b>
-New balance movements: <b>${tg(newRows)}</b>`;
+New successful payments: <b>${tg(transactions.length)}</b>
+New refunds/chargebacks: <b>${tg(adjustments.length)}</b>`;
   } catch (error) {
     return `<b>${tg(account.title)} - Balance</b>
 
