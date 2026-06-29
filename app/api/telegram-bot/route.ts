@@ -3,6 +3,8 @@ export const dynamic = "force-dynamic";
 
 const TIME_ZONE = "Europe/Kyiv";
 const DESK1_CHAT_ID = process.env.TELEGRAM_DESK1_CHAT_ID || "-1003983054033";
+const DESK2_CHAT_ID = process.env.TELEGRAM_DESK2_CHAT_ID || "-1003808961913";
+const DESK3_CHAT_ID = process.env.TELEGRAM_DESK3_CHAT_ID || "-1004235978427";
 const SUCCESS_STATUSES = new Set(["completed", "billed", "paid"]);
 const DEFAULT_BALANCE_BASE_CUTOFF_ISO = "2026-06-28T16:44:06Z";
 
@@ -41,15 +43,41 @@ function getAccountForChat(chatId: unknown): StatsAccount {
     };
   }
 
+  if (id === DESK2_CHAT_ID) {
+    return {
+      apiKey: process.env.PADDLE_DESK2_API_KEY || "",
+      title: "Holytime Final",
+      balanceBaseAmount: Number(process.env.PADDLE_DESK2_BALANCE_BASE_AMOUNT || 60845.43),
+      balanceBaseCurrency: process.env.PADDLE_DESK2_BALANCE_BASE_CURRENCY || "USD",
+      balanceBaseCutoffIso: process.env.PADDLE_DESK2_BALANCE_BASE_CUTOFF_ISO || DEFAULT_BALANCE_BASE_CUTOFF_ISO,
+      successfulPaymentsBaseCount: Number(process.env.PADDLE_DESK2_SUCCESSFUL_PAYMENTS_BASE_COUNT || 342),
+      refundsAllTimeAmount: Number(process.env.PADDLE_DESK2_REFUNDS_ALL_TIME_AMOUNT || 5113.69),
+      refundsAllTimeCurrency: process.env.PADDLE_DESK2_REFUNDS_ALL_TIME_CURRENCY || "USD",
+    };
+  }
+
+  if (id === DESK3_CHAT_ID) {
+    return {
+      apiKey: process.env.PADDLE_DESK3_API_KEY || "",
+      title: "JolliesTime",
+      balanceBaseAmount: Number(process.env.PADDLE_DESK3_BALANCE_BASE_AMOUNT || 0),
+      balanceBaseCurrency: process.env.PADDLE_DESK3_BALANCE_BASE_CURRENCY || "USD",
+      balanceBaseCutoffIso: process.env.PADDLE_DESK3_BALANCE_BASE_CUTOFF_ISO || DEFAULT_BALANCE_BASE_CUTOFF_ISO,
+      successfulPaymentsBaseCount: Number(process.env.PADDLE_DESK3_SUCCESSFUL_PAYMENTS_BASE_COUNT || 0),
+      refundsAllTimeAmount: Number(process.env.PADDLE_DESK3_REFUNDS_ALL_TIME_AMOUNT || 0),
+      refundsAllTimeCurrency: process.env.PADDLE_DESK3_REFUNDS_ALL_TIME_CURRENCY || "USD",
+    };
+  }
+
   return {
-    apiKey: process.env.PADDLE_DESK2_API_KEY || "",
-    title: "Holytime Final",
-    balanceBaseAmount: Number(process.env.PADDLE_DESK2_BALANCE_BASE_AMOUNT || 60845.43),
-    balanceBaseCurrency: process.env.PADDLE_DESK2_BALANCE_BASE_CURRENCY || "USD",
-    balanceBaseCutoffIso: process.env.PADDLE_DESK2_BALANCE_BASE_CUTOFF_ISO || DEFAULT_BALANCE_BASE_CUTOFF_ISO,
-    successfulPaymentsBaseCount: Number(process.env.PADDLE_DESK2_SUCCESSFUL_PAYMENTS_BASE_COUNT || 342),
-    refundsAllTimeAmount: Number(process.env.PADDLE_DESK2_REFUNDS_ALL_TIME_AMOUNT || 5113.69),
-    refundsAllTimeCurrency: process.env.PADDLE_DESK2_REFUNDS_ALL_TIME_CURRENCY || "USD",
+    apiKey: "",
+    title: `Unknown chat ${id}`,
+    balanceBaseAmount: 0,
+    balanceBaseCurrency: "USD",
+    balanceBaseCutoffIso: DEFAULT_BALANCE_BASE_CUTOFF_ISO,
+    successfulPaymentsBaseCount: 0,
+    refundsAllTimeAmount: 0,
+    refundsAllTimeCurrency: "USD",
   };
 }
 
