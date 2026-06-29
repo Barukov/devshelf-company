@@ -376,6 +376,17 @@ export async function POST(req: Request) {
 
   const account = getAccountForChat(chatId);
 
+  if (text === "/id") {
+    await sendTelegram(
+      chatId,
+      `<b>Chat ID</b>
+
+${tg(chatId)}
+${message?.chat?.title ? `\n${tg(message.chat.title)}` : ""}`
+    );
+    return new Response("OK", { status: 200 });
+  }
+
   if (text === "/today") {
     await sendTelegram(chatId, await buildTodayReport(account));
     return new Response("OK", { status: 200 });
@@ -387,7 +398,7 @@ export async function POST(req: Request) {
   }
 
   if (text === "/help" || text === "/start") {
-    await sendTelegram(chatId, "Commands: /today, /balance");
+    await sendTelegram(chatId, "Commands: /today, /balance, /id");
   }
 
   return new Response("OK", { status: 200 });
