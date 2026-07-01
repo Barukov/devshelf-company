@@ -1,1 +1,130 @@
 @import "tailwindcss";
+
+@keyframes scan-line {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.75;
+  }
+  100% {
+    transform: translateY(480px);
+    opacity: 0;
+  }
+}
+
+@keyframes load-bar {
+  0% {
+    width: 18%;
+  }
+  50% {
+    width: 92%;
+  }
+  100% {
+    width: 68%;
+  }
+}
+
+@keyframes sheet-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(1deg);
+  }
+}
+
+@keyframes preview-rise {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes tile-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.scan-line {
+  animation: scan-line 4.8s ease-in-out infinite;
+}
+
+.load-bar {
+  animation: load-bar 4.2s ease-in-out infinite;
+}
+
+.load-bar-delay {
+  animation-delay: 0.9s;
+}
+
+.stack-sheet {
+  animation: sheet-float 5.4s ease-in-out infinite;
+}
+
+.stack-sheet:nth-child(2) {
+  animation-duration: 5.9s;
+}
+
+.stack-sheet:nth-child(3) {
+  animation-duration: 6.3s;
+}
+
+.stack-sheet:nth-child(4) {
+  animation-duration: 5.1s;
+}
+
+.preview-panel {
+  animation: preview-rise 0.7s ease-out both;
+}
+
+.include-row {
+  animation: row-in 0.55s ease-out both;
+}
+
+.catalog-tile {
+  animation: tile-in 0.55s ease-out both;
+}
+
+.feature-strip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-120%);
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+  animation: feature-sheen 5s ease-in-out infinite;
+}
+
+@keyframes feature-sheen {
+  0%,
+  45% {
+    transform: translateX(-120%);
+  }
+  70%,
+  100% {
+    transform: translateX(120%);
+  }
+}
