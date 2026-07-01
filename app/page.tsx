@@ -169,7 +169,7 @@ export default function Page() {
       </section>
 
       <section className="relative overflow-hidden bg-[#f7f2e8] px-5 py-20 text-[#14100a] md:px-8">
-        <div className="absolute inset-y-0 left-0 w-1/2 bg-[radial-gradient(circle_at_30%_30%,rgba(8,127,114,.16),transparent_32%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,127,114,.10),transparent_42%),repeating-linear-gradient(90deg,rgba(20,16,10,.035)_0_1px,transparent_1px_84px)]" />
         <div className="relative mx-auto grid max-w-7xl gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.24em] text-[#087f72]">Preview lab</p>
