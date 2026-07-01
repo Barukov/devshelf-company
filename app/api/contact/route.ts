@@ -3,60 +3,27 @@ import { Resend } from "resend";
 import { sendDesk1TelegramMessage, tg } from "../../lib/telegram";
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
+const SUPPORT_EMAIL = "support@devshelf.company";
 
 export async function POST(req: Request) {
   try {
     const { name, email, message } = await req.json();
 
-    await sendDesk1TelegramMessage(`<b>New Holytime support request</b>
-
-<b>Name:</b> ${tg(name)}
-<b>Email:</b> ${tg(email)}
-
-<b>Message:</b>
-${tg(message)}`);
+    await sendDesk1TelegramMessage("<b>New DevShelf support request</b>\n\n<b>Name:</b> " + tg(name) + "\n<b>Email:</b> " + tg(email) + "\n\n<b>Message:</b>\n" + tg(message));
 
     await resend.emails.send({
-    from: "Holytime <support@holytime.auction>",
-      to: "supportholytime@gmail.com",
-      subject: "New support request — Holytime",
-      html: `
-        <h2>New support request 💬</h2>
-
-        <p><strong>Name:</strong> ${name}</p>
-        <p><strong>Email:</strong> ${email}</p>
-
-        <p><strong>Message:</strong></p>
-        <p>${message}</p>
-      `,
+      from: "DevShelf Academy <support@devshelf.company>",
+      to: SUPPORT_EMAIL,
+      subject: "New support request - DevShelf Academy",
+      html: "<h2>New support request</h2><p><strong>Name:</strong> " + name + "</p><p><strong>Email:</strong> " + email + "</p><p><strong>Message:</strong></p><p>" + message + "</p>",
     });
 
-
     await resend.emails.send({
-  from: "Holytime <support@holytime.auction>",
-  to: email,
-  subject: "We received your message 💜",
-  html: `
-    <p>Hi,</p>
-
-    <p>Thank you for contacting <strong>Holytime Support</strong> 💜</p>
-
-    <p>Your message has been successfully received — our team will review it and get back to you as soon as possible.</p>
-
-    <hr />
-
-    <p><strong>Support working hours:</strong><br/>
-    Monday – Friday<br/>
-    09:00 – 22:00 (GMT)</p>
-
-    <p>We usually respond within <strong>24–48 hours</strong>, but often much faster.</p>
-
-    <p>If your request is related to a purchase, please include your email used during checkout.</p>
-
-    <p>Thank you for your patience 🙌<br/>
-    — <strong>Holytime Support Team</strong></p>
-  `,
-});
+      from: "DevShelf Academy <support@devshelf.company>",
+      to: email,
+      subject: "We received your DevShelf message",
+      html: "<p>Hi,</p><p>Thank you for contacting <strong>DevShelf Academy Support</strong>.</p><p>Your message has been received. We usually respond within 24-48 hours.</p><p>If your request is related to a purchase, please include the email used during checkout.</p><p>- <strong>DevShelf Academy Support</strong></p>",
+    });
 
     return NextResponse.json({ success: true });
   } catch (e) {

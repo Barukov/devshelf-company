@@ -1,84 +1,46 @@
 import Link from "next/link";
-
-const products = [
-  ["product161", "Professional Digital Pack", "€161", "Advanced worksheets, trackers and premium materials."],
-  ["product199", "Elite Learning Pack", "€199", "Educational materials, structured learning resources and practical study guides."],
-  ["starter", "Starter Digital Pack", "€219", "PDF guides, checklists, note templates and study planners."],
-  ["product245", "Ultimate Learning Pack", "€245", "Advanced guides, templates, worksheets and structured learning resources."],
-  ["product159", "Essential Digital Pack", "€249", "Core guides, templates and study resources."],
-  ["advanced", "Advanced Digital Pack", "€250", "Worksheets, examples, progress trackers and structured resources."],
-  ["product255", "Master Resource Pack", "€255", "Premium materials, advanced resources, templates and study systems."],
-  ["premium", "Premium Digital Bundle", "€500", "Full digital resource library with guides, templates, worksheets and bonuses."],
-];
+import { products } from "../lib/products";
 
 const deliverables = [
-  "PDF guides",
-  "Worksheets",
-  "Study planners",
-  "Checklists",
-  "Templates",
-  "Progress trackers",
-  "Digital resource files delivered by email",
+  "PDF course files",
+  "Programming notes",
+  "C# and .NET resources",
+  "Practice exercises",
+  "Study checklists",
+  "Download link by email",
 ];
 
 export default function PricingPage() {
   return (
-    <main className="min-h-screen bg-gradient-to-r from-[#eafff6] via-white to-[#fff2e8] text-[#071b18]">
-      <header className="bg-[#082f2a] px-8 py-8 text-white">
+    <main className="min-h-screen bg-[#f6f4ec] text-[#16130f]">
+      <header className="bg-[#11100d] px-6 py-7 text-white md:px-8">
         <div className="mx-auto flex max-w-7xl items-center justify-between">
-          <Link href="/" className="text-3xl font-black">HOLYTIME</Link>
-          <div className="flex items-center gap-4">
-            <Link href="/terms" className="font-bold">Terms</Link>
-            <Link href="/" className="rounded-full bg-[#f9735b] px-7 py-3 font-bold">Back home</Link>
-          </div>
+          <Link href="/" className="text-2xl font-black md:text-3xl">DevShelf Academy</Link>
+          <Link href="/" className="rounded-full bg-[#d6ff5f] px-6 py-3 font-black text-black">Back home</Link>
         </div>
       </header>
-
-      <section className="mx-auto max-w-7xl px-8 py-24">
-        <div className="mb-12 max-w-3xl">
-          <p className="font-black uppercase tracking-[0.25em] text-[#0f9f8f]">
-            Pricing
-          </p>
-          <h1 className="mt-4 text-6xl font-black">Products and pricing</h1>
-          <p className="mt-6 text-lg leading-8 text-black/60">
-            Holytime sells digital learning products through https://holytime.auction/.
-            All purchases are digital products delivered by email after successful
-            payment confirmation.
-          </p>
-        </div>
-
-        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-          {products.map(([slug, name, price, desc]) => (
-            <Link
-              key={slug}
-              href={`/product/${slug}`}
-              className="flex min-h-[350px] flex-col rounded-[20px] bg-white p-8 shadow-xl transition duration-300 hover:-translate-y-2"
-            >
-              <p className="text-sm font-black uppercase tracking-[0.2em] text-[#0f9f8f]">
-                Digital product
-              </p>
-              <h2 className="mt-5 min-h-[76px] text-3xl font-black">{name}</h2>
-              <p className="mt-5 min-h-[96px] leading-8 text-black/60">{desc}</p>
-              <p className="mt-auto text-5xl font-black">{price}</p>
-              <div className="mt-8 rounded-2xl bg-[#f9735b] px-6 py-4 text-center font-bold text-white">
-                View product
-              </div>
+      <section className="mx-auto max-w-7xl px-6 py-20 md:px-8">
+        <p className="font-black uppercase tracking-[0.28em] text-[#607000]">Pricing</p>
+        <h1 className="mt-4 max-w-4xl text-6xl font-black leading-tight">Digital programming packs</h1>
+        <p className="mt-6 max-w-3xl text-lg leading-8 text-black/60">DevShelf Academy sells downloadable PDF books, course files and programming resources through https://devshelf.company/. All products are digital and delivered by email after successful payment confirmation.</p>
+        <div className="mt-14 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+          {products.map((product) => (
+            <Link key={product.slug} href={"/product/" + product.slug} className="flex min-h-[370px] flex-col rounded-[1.5rem] bg-white p-7 shadow-[0_18px_55px_rgba(22,19,15,.08)] transition hover:-translate-y-2">
+              <p className="text-xs font-black uppercase tracking-[0.25em] text-[#607000]">{product.tag}</p>
+              <h2 className="mt-5 text-3xl font-black leading-tight">{product.name}</h2>
+              <p className="mt-5 leading-7 text-black/60">{product.shortDescription}</p>
+              <p className="mt-auto text-5xl font-black">{product.price.replace("?", "")} EUR</p>
+              <div className="mt-7 rounded-full bg-[#11100d] px-6 py-4 text-center font-black text-white">View product</div>
             </Link>
           ))}
         </div>
-
-        <div className="mt-16 rounded-[28px] bg-white p-8 shadow-xl">
-          <h2 className="text-4xl font-black">Deliverables included</h2>
+        <div className="mt-16 rounded-[2rem] bg-[#11100d] p-8 text-white">
+          <h2 className="text-4xl font-black">Included across the catalog</h2>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {deliverables.map((item) => (
-              <div key={item} className="rounded-[16px] bg-[#eafff6] p-5 font-bold">
-                {item}
-              </div>
-            ))}
+            {deliverables.map((item) => <div key={item} className="rounded-2xl bg-white/8 p-5 font-bold text-white/80">{item}</div>)}
           </div>
         </div>
       </section>
     </main>
   );
 }
-

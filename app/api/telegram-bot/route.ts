@@ -33,7 +33,7 @@ function getAccountForChat(chatId: unknown): StatsAccount {
   if (id === DESK1_CHAT_ID) {
     return {
       apiKey: process.env.PADDLE_API_KEY || "",
-      title: "Holytime Auction",
+      title: "DevShelf Academy",
       balanceBaseAmount: Number(process.env.PADDLE_DESK1_BALANCE_BASE_AMOUNT || 4568.82),
       balanceBaseCurrency: process.env.PADDLE_DESK1_BALANCE_BASE_CURRENCY || "USD",
       balanceBaseCutoffIso: process.env.PADDLE_DESK1_BALANCE_BASE_CUTOFF_ISO || DEFAULT_BALANCE_BASE_CUTOFF_ISO,
@@ -46,7 +46,7 @@ function getAccountForChat(chatId: unknown): StatsAccount {
   if (id === DESK2_CHAT_ID) {
     return {
       apiKey: process.env.PADDLE_DESK2_API_KEY || "",
-      title: "Holytime Final",
+      title: "DevShelf Archive",
       balanceBaseAmount: Number(process.env.PADDLE_DESK2_BALANCE_BASE_AMOUNT || 60845.43),
       balanceBaseCurrency: process.env.PADDLE_DESK2_BALANCE_BASE_CURRENCY || "USD",
       balanceBaseCutoffIso: process.env.PADDLE_DESK2_BALANCE_BASE_CUTOFF_ISO || DEFAULT_BALANCE_BASE_CUTOFF_ISO,

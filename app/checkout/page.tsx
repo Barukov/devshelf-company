@@ -11,11 +11,11 @@ declare global {
       Initialize: (options: unknown) => void;
       Checkout: { open: (options: unknown) => void };
     };
-    __holytimePaddleReady?: boolean;
+    __devshelfPaddleReady?: boolean;
   }
 }
 
-const PADDLE_CLIENT_TOKEN = "live_975d78a2f44244615e61b0e393b";
+const PADDLE_CLIENT_TOKEN = "live_71d342f9dd19e43842fbd037579";
 
 export default function CheckoutPage() {
   const [scriptLoaded, setScriptLoaded] = useState(false);
@@ -30,50 +30,22 @@ export default function CheckoutPage() {
 
   const openCheckout = useCallback(() => {
     const transactionId = getTransactionId();
+    if (!transactionId) { setMessage("Checkout link is missing. Please go back and try again."); return; }
+    if (!window.Paddle) { setMessage("Checkout is still loading. Please try again in a moment."); return; }
+    if (openedTransactionRef.current === transactionId) { setMessage("Checkout is already open. Complete payment in the secure Paddle window."); return; }
 
-    if (!transactionId) {
-      setMessage("Checkout link is missing. Please go back and try again.");
-      return;
-    }
-
-    if (!window.Paddle) {
-      setMessage("Checkout is still loading. Please try again in a moment.");
-      return;
-    }
-
-    if (openedTransactionRef.current === transactionId) {
-      setMessage("Checkout is already open. Complete payment in the secure Paddle window.");
-      return;
-    }
+    const successUrl = window.location.origin + "/success?txn=" + encodeURIComponent(transactionId);
 
     try {
       window.Paddle.Environment?.set("production");
-
-      if (!window.__holytimePaddleReady) {
+      if (!window.__devshelfPaddleReady) {
         window.Paddle.Initialize({
           token: PADDLE_CLIENT_TOKEN,
-          checkout: {
-            settings: {
-              displayMode: "overlay",
-              theme: "light",
-              locale: "en",
-              successUrl: `${window.location.origin}/success?txn=${encodeURIComponent(transactionId)}`,
-            },
-          },
+          checkout: { settings: { displayMode: "overlay", theme: "light", locale: "en", successUrl } },
         });
-        window.__holytimePaddleReady = true;
+        window.__devshelfPaddleReady = true;
       }
-
-      window.Paddle.Checkout.open({
-        transactionId,
-        settings: {
-          displayMode: "overlay",
-          theme: "light",
-          locale: "en",
-          successUrl: `${window.location.origin}/success?txn=${encodeURIComponent(transactionId)}`,
-        },
-      });
-
+      window.Paddle.Checkout.open({ transactionId, settings: { displayMode: "overlay", theme: "light", locale: "en", successUrl } });
       openedTransactionRef.current = transactionId;
       setCheckoutOpened(true);
       setMessage("Checkout is open. Complete payment in the secure Paddle window.");
@@ -83,41 +55,18 @@ export default function CheckoutPage() {
     }
   }, [getTransactionId]);
 
-  useEffect(() => {
-    if (scriptLoaded) {
-      openCheckout();
-    }
-  }, [openCheckout, scriptLoaded]);
+  useEffect(() => { if (scriptLoaded) openCheckout(); }, [openCheckout, scriptLoaded]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-black px-6 text-white">
-      <Script
-        src="https://cdn.paddle.com/paddle/v2/paddle.js"
-        strategy="afterInteractive"
-        onLoad={() => setScriptLoaded(true)}
-      />
-
+    <main className="flex min-h-screen items-center justify-center bg-[#11100d] px-6 text-white">
+      <Script src="https://cdn.paddle.com/paddle/v2/paddle.js" strategy="afterInteractive" onLoad={() => setScriptLoaded(true)} />
       <div className="max-w-xl text-center">
+        <p className="mb-3 font-black uppercase tracking-[0.25em] text-[#d6ff5f]">DevShelf Academy</p>
         <h1 className="mb-4 text-4xl font-black">Secure checkout</h1>
-
         <p className="mb-8 text-white/70">{message}</p>
-
         <div className="flex flex-wrap justify-center gap-3">
-          <button
-            type="button"
-            onClick={openCheckout}
-            disabled={checkoutOpened}
-            className="rounded-xl bg-white px-6 py-3 font-bold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Open checkout
-          </button>
-
-          <Link
-            href="/"
-            className="rounded-xl border border-white/25 px-6 py-3 font-bold text-white transition hover:bg-white/10"
-          >
-            Back to products
-          </Link>
+          <button type="button" onClick={openCheckout} disabled={checkoutOpened} className="rounded-xl bg-[#d6ff5f] px-6 py-3 font-bold text-black transition hover:bg-[#e2ff80] disabled:cursor-not-allowed disabled:opacity-60">Open checkout</button>
+          <Link href="/" className="rounded-xl border border-white/25 px-6 py-3 font-bold text-white transition hover:bg-white/10">Back to products</Link>
         </div>
       </div>
     </main>
