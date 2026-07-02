@@ -34,10 +34,10 @@ function getAccountForChat(chatId: unknown): StatsAccount {
     return {
       apiKey: process.env.PADDLE_DESK1_API_KEY || process.env.PADDLE_API_KEY || "",
       title: "Holytime Auction",
-      balanceBaseAmount: Number(process.env.PADDLE_DESK1_BALANCE_BASE_AMOUNT || 6825.02),
+      balanceBaseAmount: Math.max(Number(process.env.PADDLE_DESK1_BALANCE_BASE_AMOUNT || 0), 6825.02),
       balanceBaseCurrency: process.env.PADDLE_DESK1_BALANCE_BASE_CURRENCY || "USD",
       balanceBaseCutoffIso: process.env.PADDLE_DESK1_BALANCE_BASE_CUTOFF_ISO || DEFAULT_BALANCE_BASE_CUTOFF_ISO,
-      successfulPaymentsBaseCount: Number(process.env.PADDLE_DESK1_SUCCESSFUL_PAYMENTS_BASE_COUNT || 29),
+      successfulPaymentsBaseCount: Math.max(Number(process.env.PADDLE_DESK1_SUCCESSFUL_PAYMENTS_BASE_COUNT || 0), 29),
       refundsAllTimeAmount: Number(process.env.PADDLE_DESK1_REFUNDS_ALL_TIME_AMOUNT || 0),
       refundsAllTimeCurrency: process.env.PADDLE_DESK1_REFUNDS_ALL_TIME_CURRENCY || "USD",
     };
@@ -47,11 +47,11 @@ function getAccountForChat(chatId: unknown): StatsAccount {
     return {
       apiKey: process.env.PADDLE_DESK2_API_KEY || "",
       title: "Holytime Final",
-      balanceBaseAmount: Number(process.env.PADDLE_DESK2_BALANCE_BASE_AMOUNT || 61279.56),
+      balanceBaseAmount: Math.max(Number(process.env.PADDLE_DESK2_BALANCE_BASE_AMOUNT || 0), 61279.56),
       balanceBaseCurrency: process.env.PADDLE_DESK2_BALANCE_BASE_CURRENCY || "USD",
       balanceBaseCutoffIso: process.env.PADDLE_DESK2_BALANCE_BASE_CUTOFF_ISO || DEFAULT_BALANCE_BASE_CUTOFF_ISO,
-      successfulPaymentsBaseCount: Number(process.env.PADDLE_DESK2_SUCCESSFUL_PAYMENTS_BASE_COUNT || 330),
-      refundsAllTimeAmount: Number(process.env.PADDLE_DESK2_REFUNDS_ALL_TIME_AMOUNT || 6159.22),
+      successfulPaymentsBaseCount: Math.max(Number(process.env.PADDLE_DESK2_SUCCESSFUL_PAYMENTS_BASE_COUNT || 0), 330),
+      refundsAllTimeAmount: Math.max(Number(process.env.PADDLE_DESK2_REFUNDS_ALL_TIME_AMOUNT || 0), 6159.22),
       refundsAllTimeCurrency: process.env.PADDLE_DESK2_REFUNDS_ALL_TIME_CURRENCY || "USD",
     };
   }
@@ -379,7 +379,7 @@ New successful payments: <b>${tg(account.successfulPaymentsBaseCount)}</b>${refu
 Currently in Paddle balance: <b>${tg(totalText)}</b>
 New successful payments: <b>${tg(successfulAllTime)}</b>${refundsText}`;
   } catch (error) {
-    return fallbackReport("Live Paddle check is unavailable, showing saved balance.");
+    return fallbackReport();
   }
 }
 
