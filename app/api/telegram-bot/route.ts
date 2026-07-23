@@ -28,7 +28,7 @@ type LinkSession = {
 const linkSessions = new Map<string, LinkSession>();
 let commandsConfigured = false;
 const TELEGRAM_TIMEOUT_MS = 2500;
-const CREATE_LINK_BUTTON = "Create Paddle link";
+const CREATE_LINK_BUTTON = "Create payment link";
 const BACK_TO_SITES_BUTTON = "Back to site choice";
 const SKIP_ZIP_BUTTON = "No ZIP / skip";
 
@@ -421,7 +421,7 @@ async function handleCallback(callback: any) {
 
   if (data === "menu_create_link") {
     linkSessions.set(userId, { step: "site" });
-    await sendTelegram(chatId, "<b>Step 1 of 5</b>\nChoose site / desk:", siteKeyboard());
+    await sendTelegram(chatId, "<b>Choose desk</b>", siteKeyboard());
     return;
   }
 
@@ -435,7 +435,7 @@ async function handleCallback(callback: any) {
     }
 
     linkSessions.set(userId, { siteId, step: "product" });
-    await sendTelegram(chatId, `<b>Step 2 of 5</b>\nDesk: <b>${tg(site.label)}</b>\n\nChoose product:`, productKeyboard(site));
+    await sendTelegram(chatId, `<b>Choose product</b>\n${tg(site.label)}`, productKeyboard(site));
     return;
   }
 
@@ -453,13 +453,12 @@ async function handleCallback(callback: any) {
     linkSessions.set(userId, { ...session, productId: product.id, step: "email" });
     await sendTelegram(
       chatId,
-      `<b>Step 3 of 5</b>
+      `<b>Customer email</b>
 
-Desk: <b>${tg(site.label)}</b>
-Product: <b>${tg(product.name)}</b>
-Price: <b>${tg(product.price)}</b>
+${tg(site.label)}
+${tg(product.name)} - ${tg(product.price)}
 
-Send customer email.`,
+Send the customer's email.`,
       removeKeyboard(),
     );
     return;
@@ -482,7 +481,7 @@ Send customer email.`,
     }
 
     linkSessions.set(userId, { ...session, country: selected, step: "postal" });
-    await sendTelegram(chatId, `<b>Step 5 of 5</b>\nCountry: <b>${tg(selected)}</b>\n\nSend ZIP/postal code or skip it.`, postalKeyboard());
+    await sendTelegram(chatId, `<b>Postal code</b>\nCountry: <b>${tg(selected)}</b>\n\nSend ZIP/postal code or skip it.`, postalKeyboard());
   }
 }
 
@@ -495,9 +494,9 @@ async function handleText(chatId: string | number, chatType: string, userId: str
     return true;
   }
 
-  if (text === CREATE_LINK_BUTTON || text === "Create payment link") {
+  if (text === CREATE_LINK_BUTTON || text === "Create Paddle link") {
     linkSessions.set(userId, { step: "site" });
-    await sendTelegram(chatId, "<b>Step 1 of 5</b>\nChoose site / desk:", siteKeyboard());
+    await sendTelegram(chatId, "<b>Choose desk</b>", siteKeyboard());
     return true;
   }
 
@@ -516,11 +515,19 @@ async function handleText(chatId: string | number, chatType: string, userId: str
 
   if (text === BACK_TO_SITES_BUTTON || text === "Back to site choice") {
     linkSessions.set(userId, { step: "site" });
-    await sendTelegram(chatId, "<b>Step 1 of 5</b>\nChoose site / desk:", siteKeyboard());
+    await sendTelegram(chatId, "<b>Choose desk</b>", siteKeyboard());
     return true;
   }
 
   if (!session) {
+    const site = siteByLabel(text);
+
+    if (site) {
+      linkSessions.set(userId, { siteId: site.id, step: "product" });
+      await sendTelegram(chatId, `<b>Choose product</b>\n${tg(site.label)}`, productKeyboard(site));
+      return true;
+    }
+
     if (chatType === "private") {
       await sendMenu(chatId);
       return true;
@@ -533,12 +540,12 @@ async function handleText(chatId: string | number, chatType: string, userId: str
     const site = siteByLabel(text);
 
     if (!site) {
-      await sendTelegram(chatId, "<b>Step 1 of 5</b>\nChoose site / desk from the buttons:", siteKeyboard());
+      await sendTelegram(chatId, "<b>Choose desk</b>\nUse the buttons below.", siteKeyboard());
       return true;
     }
 
     linkSessions.set(userId, { siteId: site.id, step: "product" });
-    await sendTelegram(chatId, `<b>Step 2 of 5</b>\nDesk: <b>${tg(site.label)}</b>\n\nChoose product:`, productKeyboard(site));
+    await sendTelegram(chatId, `<b>Choose product</b>\n${tg(site.label)}`, productKeyboard(site));
     return true;
   }
 
@@ -548,10 +555,10 @@ async function handleText(chatId: string | number, chatType: string, userId: str
 
     if (!site || !product) {
       if (site) {
-        await sendTelegram(chatId, `<b>Step 2 of 5</b>\nChoose product from the buttons:`, productKeyboard(site));
+        await sendTelegram(chatId, `<b>Choose product</b>\nUse the buttons below.`, productKeyboard(site));
       } else {
         linkSessions.set(userId, { step: "site" });
-        await sendTelegram(chatId, "<b>Step 1 of 5</b>\nChoose site / desk:", siteKeyboard());
+        await sendTelegram(chatId, "<b>Choose desk</b>", siteKeyboard());
       }
       return true;
     }
@@ -559,13 +566,12 @@ async function handleText(chatId: string | number, chatType: string, userId: str
     linkSessions.set(userId, { ...session, productId: product.id, step: "email" });
     await sendTelegram(
       chatId,
-      `<b>Step 3 of 5</b>
+      `<b>Customer email</b>
 
-Desk: <b>${tg(site.label)}</b>
-Product: <b>${tg(product.name)}</b>
-Price: <b>${tg(product.price)}</b>
+${tg(site.label)}
+${tg(product.name)} - ${tg(product.price)}
 
-Send customer email.`,
+Send the customer's email.`,
       removeKeyboard(),
     );
     return true;
@@ -578,7 +584,7 @@ Send customer email.`,
     }
 
     linkSessions.set(userId, { ...session, email: text, step: "country" });
-    await sendTelegram(chatId, `<b>Step 4 of 5</b>\nEmail: <b>${tg(text)}</b>\n\nChoose billing country for Paddle checkout:`, countryKeyboard());
+    await sendTelegram(chatId, `<b>Billing country</b>\nEmail: <b>${tg(text)}</b>`, countryKeyboard());
     return true;
   }
 
@@ -596,7 +602,7 @@ Send customer email.`,
     }
 
     linkSessions.set(userId, { ...session, country, step: "postal" });
-    await sendTelegram(chatId, `<b>Step 5 of 5</b>\nCountry: <b>${tg(country)}</b>\n\nSend ZIP/postal code or skip it.`, postalKeyboard());
+    await sendTelegram(chatId, `<b>Postal code</b>\nCountry: <b>${tg(country)}</b>\n\nSend ZIP/postal code or skip it.`, postalKeyboard());
     return true;
   }
 
