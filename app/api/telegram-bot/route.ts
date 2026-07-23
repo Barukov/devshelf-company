@@ -107,52 +107,80 @@ function productById(site: SiteConfig, productId: unknown) {
   return site.products.find((product) => product.id === productId);
 }
 
+function siteByLabel(label: string) {
+  return sites().find((site) => site.label === label);
+}
+
+function productByLabel(site: SiteConfig, label: string) {
+  return site.products.find((product) => `${product.name} - ${product.price}` === label);
+}
+
+function countryByLabel(label: string) {
+  const countries: Record<string, string> = {
+    Germany: "DE",
+    Spain: "ES",
+    France: "FR",
+    Italy: "IT",
+    Netherlands: "NL",
+    "United Kingdom": "GB",
+    "United States": "US",
+  };
+
+  return countries[label];
+}
+
 function mainMenuKeyboard() {
   return {
-    inline_keyboard: [[{ text: "Create payment link", callback_data: "menu_create_link" }]],
+    keyboard: [["Create payment link"]],
+    resize_keyboard: true,
+    one_time_keyboard: false,
   };
 }
 
 function siteKeyboard() {
   return {
-    inline_keyboard: sites().map((site) => [
-      { text: site.label, callback_data: `site:${site.id}` },
-    ]),
+    keyboard: sites().map((site) => [site.label]),
+    resize_keyboard: true,
+    one_time_keyboard: false,
   };
 }
 
 function productKeyboard(site: SiteConfig) {
   return {
-    inline_keyboard: [
-      ...site.products.map((product) => [
-        { text: `${product.name} - ${product.price}`, callback_data: `product:${product.id}` },
-      ]),
-      [{ text: "Back to site choice", callback_data: "menu_create_link" }],
+    keyboard: [
+      ...site.products.map((product) => [`${product.name} - ${product.price}`]),
+      ["Back to site choice"],
+      ["Cancel"],
     ],
+    resize_keyboard: true,
+    one_time_keyboard: false,
   };
 }
 
 function countryKeyboard() {
   return {
-    inline_keyboard: [
-      [
-        { text: "Germany", callback_data: "country:DE" },
-        { text: "Spain", callback_data: "country:ES" },
-      ],
-      [
-        { text: "France", callback_data: "country:FR" },
-        { text: "Italy", callback_data: "country:IT" },
-      ],
-      [
-        { text: "Netherlands", callback_data: "country:NL" },
-        { text: "United Kingdom", callback_data: "country:GB" },
-      ],
-      [
-        { text: "United States", callback_data: "country:US" },
-        { text: "Other country code", callback_data: "country:OTHER" },
-      ],
+    keyboard: [
+      ["Germany", "Spain"],
+      ["France", "Italy"],
+      ["Netherlands", "United Kingdom"],
+      ["United States", "Other country code"],
+      ["Cancel"],
     ],
+    resize_keyboard: true,
+    one_time_keyboard: false,
   };
+}
+
+function postalKeyboard() {
+  return {
+    keyboard: [["No ZIP / skip"], ["Cancel"]],
+    resize_keyboard: true,
+    one_time_keyboard: true,
+  };
+}
+
+function removeKeyboard() {
+  return { remove_keyboard: true };
 }
 
 async function telegram(method: string, body: unknown) {
@@ -349,6 +377,7 @@ ZIP: <b>${tg(postalCode || "not set")}</b>
 Transaction: <code>${tg(result.transactionId || "unknown")}</code>
 
 ${tg(result.url)}`,
+      removeKeyboard(),
     );
   } catch (error) {
     await sendTelegram(chatId, `Could not create link: ${tg(error instanceof Error ? error.message : "unknown error")}`);
@@ -407,6 +436,7 @@ Site: <b>${tg(site.label)}</b>
 Product: <b>${tg(product.name)} - ${tg(product.price)}</b>
 
 Send customer email.`,
+      removeKeyboard(),
     );
     return;
   }
@@ -428,7 +458,7 @@ Send customer email.`,
     }
 
     linkSessions.set(userId, { ...session, country: selected, step: "postal" });
-    await sendTelegram(chatId, `Country: <b>${tg(selected)}</b>\n\nSend ZIP/postal code. If no ZIP, send <code>-</code>.`);
+    await sendTelegram(chatId, `Country: <b>${tg(selected)}</b>\n\nSend ZIP/postal code or skip it.`, postalKeyboard());
   }
 }
 
@@ -438,6 +468,12 @@ async function handleText(chatId: string | number, chatType: string, userId: str
   if (command === "/start" || command === "/help" || text === "menu" || text === "Menu") {
     linkSessions.delete(userId);
     await sendMenu(chatId);
+    return true;
+  }
+
+  if (text === "Create payment link") {
+    linkSessions.set(userId, { step: "site" });
+    await sendTelegram(chatId, "Choose site / desk:", siteKeyboard());
     return true;
   }
 
@@ -454,6 +490,12 @@ async function handleText(chatId: string | number, chatType: string, userId: str
 
   const session = linkSessions.get(userId);
 
+  if (text === "Back to site choice") {
+    linkSessions.set(userId, { step: "site" });
+    await sendTelegram(chatId, "Choose site / desk:", siteKeyboard());
+    return true;
+  }
+
   if (!session) {
     if (chatType === "private") {
       await sendMenu(chatId);
@@ -461,6 +503,46 @@ async function handleText(chatId: string | number, chatType: string, userId: str
     }
 
     return false;
+  }
+
+  if (session.step === "site") {
+    const site = siteByLabel(text);
+
+    if (!site) {
+      await sendTelegram(chatId, "Choose site / desk from the buttons:", siteKeyboard());
+      return true;
+    }
+
+    linkSessions.set(userId, { siteId: site.id, step: "product" });
+    await sendTelegram(chatId, `Selected: <b>${tg(site.label)}</b>\n\nChoose product:`, productKeyboard(site));
+    return true;
+  }
+
+  if (session.step === "product") {
+    const site = siteById(session.siteId);
+    const product = site ? productByLabel(site, text) : undefined;
+
+    if (!site || !product) {
+      if (site) {
+        await sendTelegram(chatId, "Choose product from the buttons:", productKeyboard(site));
+      } else {
+        linkSessions.set(userId, { step: "site" });
+        await sendTelegram(chatId, "Choose site / desk:", siteKeyboard());
+      }
+      return true;
+    }
+
+    linkSessions.set(userId, { ...session, productId: product.id, step: "email" });
+    await sendTelegram(
+      chatId,
+      `Selected:
+Site: <b>${tg(site.label)}</b>
+Product: <b>${tg(product.name)} - ${tg(product.price)}</b>
+
+Send customer email.`,
+      removeKeyboard(),
+    );
+    return true;
   }
 
   if (session.step === "email") {
@@ -475,7 +557,12 @@ async function handleText(chatId: string | number, chatType: string, userId: str
   }
 
   if (session.step === "country") {
-    const country = normalizeCountry(text);
+    if (text === "Other country code") {
+      await sendTelegram(chatId, "Send a 2-letter country code, for example DE, ES, FR, NL.");
+      return true;
+    }
+
+    const country = countryByLabel(text) || normalizeCountry(text);
 
     if (!country) {
       await sendTelegram(chatId, "Send a 2-letter country code, for example DE, ES, FR, NL.");
@@ -483,12 +570,13 @@ async function handleText(chatId: string | number, chatType: string, userId: str
     }
 
     linkSessions.set(userId, { ...session, country, step: "postal" });
-    await sendTelegram(chatId, `Country: <b>${tg(country)}</b>\n\nSend ZIP/postal code. If no ZIP, send <code>-</code>.`);
+    await sendTelegram(chatId, `Country: <b>${tg(country)}</b>\n\nSend ZIP/postal code or skip it.`, postalKeyboard());
     return true;
   }
 
   if (session.step === "postal") {
-    await sendLink(chatId, userId, text);
+    const postalCode = text === "No ZIP / skip" ? "-" : text;
+    await sendLink(chatId, userId, postalCode);
     return true;
   }
 
