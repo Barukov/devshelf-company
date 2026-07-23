@@ -123,7 +123,7 @@ function countryByLabel(label: string) {
     Italy: "IT",
     Netherlands: "NL",
     "United Kingdom": "GB",
-    "United States": "US",
+    Austria: "AT",
   };
 
   return countries[label];
@@ -163,7 +163,7 @@ function countryKeyboard() {
       ["Germany", "Spain"],
       ["France", "Italy"],
       ["Netherlands", "United Kingdom"],
-      ["United States", "Other country code"],
+      ["Austria", "Other country code"],
       ["Cancel"],
     ],
     resize_keyboard: true,
