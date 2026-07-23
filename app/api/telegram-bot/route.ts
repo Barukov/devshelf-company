@@ -272,18 +272,34 @@ async function paddlePost(apiKey: string, path: string, body: unknown) {
   return data;
 }
 
+function existingCustomerIdFromError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return message.match(/\bctm_[a-z0-9]+\b/i)?.[0];
+}
+
 async function createCustomerAddress(site: SiteConfig, email: string, country: string, postalCode: string) {
   if (!country) return {};
 
-  const customer = await paddlePost(site.apiKey, "/customers", { email });
-  const customerId = customer.data?.id;
+  let customerId = "";
+
+  try {
+    const customer = await paddlePost(site.apiKey, "/customers", { email });
+    customerId = customer.data?.id || "";
+  } catch (error) {
+    const existingCustomerId = existingCustomerIdFromError(error);
+    if (!existingCustomerId) throw error;
+    customerId = existingCustomerId;
+  }
 
   if (!customerId) throw new Error("Paddle customer was not created");
 
   const addressPayload: Record<string, string> = { country_code: country };
   if (postalCode) addressPayload.postal_code = postalCode;
 
-  const address = await paddlePost(site.apiKey, `/customers/${customerId}/addresses`, addressPayload);
+  const address = await paddlePost(site.apiKey, `/customers/${customerId}/addresses`, addressPayload).catch(async (error) => {
+    if (!postalCode) throw error;
+    return paddlePost(site.apiKey, `/customers/${customerId}/addresses`, { country_code: country });
+  });
   const addressId = address.data?.id;
 
   if (!addressId) throw new Error("Paddle address was not created");
