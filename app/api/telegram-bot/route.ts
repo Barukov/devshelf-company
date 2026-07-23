@@ -1,23 +1,85 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const TIME_ZONE = "Europe/Kyiv";
-const DESK1_CHAT_ID = process.env.TELEGRAM_DESK1_CHAT_ID || "-1003983054033";
-const DESK2_CHAT_ID = process.env.TELEGRAM_DESK2_CHAT_ID || "-1003808961913";
-const DESK3_CHAT_ID = process.env.TELEGRAM_DESK3_CHAT_ID || "-1004235978427";
-const SUCCESS_STATUSES = new Set(["completed", "billed", "paid"]);
-const DEFAULT_BALANCE_BASE_CUTOFF_ISO = "2026-06-28T16:44:06Z";
-
-type StatsAccount = {
-  apiKey: string;
-  title: string;
-  balanceBaseAmount: number;
-  balanceBaseCurrency: string;
-  balanceBaseCutoffIso: string;
-  successfulPaymentsBaseCount: number;
-  refundsAllTimeAmount: number;
-  refundsAllTimeCurrency: string;
+type Product = {
+  id: string;
+  name: string;
+  price: string;
+  priceId: string;
 };
+
+type SiteConfig = {
+  id: "desk2" | "desk3";
+  label: string;
+  domain: string;
+  siteUrl: string;
+  apiKey: string;
+  products: Product[];
+};
+
+type LinkSession = {
+  siteId?: SiteConfig["id"];
+  productId?: string;
+  email?: string;
+  country?: string;
+  step: "site" | "product" | "email" | "country" | "postal";
+};
+
+const linkSessions = new Map<string, LinkSession>();
+let commandsConfigured = false;
+
+const HOLYTIME_PRODUCTS: Product[] = [
+  { id: "product161", name: "Professional Learning Pack", price: "161 EUR", priceId: "pri_01ksg1ychgaeytf7yfftmrs99r" },
+  { id: "product199", name: "Elite Learning Pack", price: "199 EUR", priceId: "pri_01ksg1v9wq5gv0fkekpnk1r3sy" },
+  { id: "starter", name: "Starter Learning Pack", price: "219 EUR", priceId: "pri_01kqstdk4f4h6xm4nf0eqjqhms" },
+  { id: "product245", name: "Ultimate Learning Pack", price: "245 EUR", priceId: "pri_01ksg4aqbr9743eq2ez4fday8g" },
+  { id: "product159", name: "Essential Learning Pack", price: "249 EUR", priceId: "pri_01ksg242d7grz69xsaf7999hd5" },
+  { id: "advanced", name: "Advanced Learning Pack", price: "250 EUR", priceId: "pri_01kqstetc9k2t3jnpm7py0r4pt" },
+  { id: "product255", name: "Master Resource Pack", price: "255 EUR", priceId: "pri_01ksg4fk56b63x123tnqegtr9q" },
+  { id: "premium", name: "Premium Resource Bundle", price: "500 EUR", priceId: "pri_01ktrx34ezebz7kw9jgdgqyz9w" },
+];
+
+const JOLLIES_PRODUCTS: Product[] = [
+  { id: "product161", name: "Focus Method Kit", price: "161 EUR", priceId: "pri_01kw95x7spfj4pr7y1wedehjy3" },
+  { id: "product199", name: "Market Notes Studio", price: "199 EUR", priceId: "pri_01kw95x89njakzc8qjj7j1qq24" },
+  { id: "starter", name: "Daily Study Starter", price: "219 EUR", priceId: "pri_01kw95x8rqyghfdb9wxzrajwmm" },
+  { id: "product245", name: "Workflow Builder Pack", price: "245 EUR", priceId: "pri_01kw95x97txkercpypmgb5g2e0" },
+  { id: "product159", name: "Core Resource Set", price: "249 EUR", priceId: "pri_01kw95x9r1tzwehmtcnh9vh9ye" },
+  { id: "advanced", name: "Advanced Practice Vault", price: "250 EUR", priceId: "pri_01kw95xadsy7fxq0by8286w7j5" },
+  { id: "product255", name: "Mastery Archive", price: "255 EUR", priceId: "pri_01kw95xawn9txaw0k4fsfxb766" },
+  { id: "premium", name: "Complete Jollies Library", price: "500 EUR", priceId: "pri_01kw95xbcehntz9y5vcrw02nwa" },
+];
+
+function sites(): SiteConfig[] {
+  return [
+    {
+      id: "desk2",
+      label: "Desk 2 - holytime.dev",
+      domain: "holytime.dev",
+      siteUrl: (process.env.DESK2_SITE_URL || process.env.HOLYTIME_SITE_URL || "https://holytime.dev").replace(/\/+$/, ""),
+      apiKey: process.env.PADDLE_DESK2_API_KEY || process.env.HOLYTIME_PADDLE_API_KEY || process.env.PADDLE_API_KEY || "",
+      products: HOLYTIME_PRODUCTS,
+    },
+    {
+      id: "desk3",
+      label: "Desk 3 - jolliestime.space",
+      domain: "jolliestime.space",
+      siteUrl: (process.env.DESK3_SITE_URL || process.env.JOLLIESTIME_SITE_URL || "https://jolliestime.space").replace(/\/+$/, ""),
+      apiKey: process.env.PADDLE_DESK3_API_KEY || process.env.JOLLIESTIME_PADDLE_API_KEY || process.env.PADDLE_API_KEY || "",
+      products: JOLLIES_PRODUCTS,
+    },
+  ];
+}
+
+function getBotToken() {
+  return (
+    process.env.TELEGRAM_BOT_TOKEN ||
+    process.env.TELEGRAM_DESK1_BOT_TOKEN ||
+    process.env.TELEGRAM_DESK2_BOT_TOKEN ||
+    process.env.TELEGRAM_DESK3_BOT_TOKEN ||
+    ""
+  );
+}
 
 function tg(value: unknown) {
   return String(value ?? "")
@@ -27,469 +89,399 @@ function tg(value: unknown) {
     .replace(/"/g, "&quot;");
 }
 
-function getAccountForChat(chatId: unknown): StatsAccount {
-  const id = String(chatId || "");
+function isEmail(value: unknown) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || ""));
+}
 
-  if (id === DESK1_CHAT_ID) {
-    return {
-      apiKey: process.env.PADDLE_DESK1_API_KEY || process.env.PADDLE_API_KEY || "",
-      title: "Holytime Auction",
-      balanceBaseAmount: Math.max(Number(process.env.PADDLE_DESK1_BALANCE_BASE_AMOUNT || 0), 6825.02),
-      balanceBaseCurrency: process.env.PADDLE_DESK1_BALANCE_BASE_CURRENCY || "USD",
-      balanceBaseCutoffIso: process.env.PADDLE_DESK1_BALANCE_BASE_CUTOFF_ISO || DEFAULT_BALANCE_BASE_CUTOFF_ISO,
-      successfulPaymentsBaseCount: Math.max(Number(process.env.PADDLE_DESK1_SUCCESSFUL_PAYMENTS_BASE_COUNT || 0), 29),
-      refundsAllTimeAmount: Number(process.env.PADDLE_DESK1_REFUNDS_ALL_TIME_AMOUNT || 0),
-      refundsAllTimeCurrency: process.env.PADDLE_DESK1_REFUNDS_ALL_TIME_CURRENCY || "USD",
-    };
-  }
+function normalizeCountry(value: unknown) {
+  const country = String(value || "").trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(country) ? country : "";
+}
 
-  if (id === DESK2_CHAT_ID) {
-    return {
-      apiKey: process.env.PADDLE_DESK2_API_KEY || "",
-      title: "Holytime Final",
-      balanceBaseAmount: 1898.29,
-      balanceBaseCurrency: process.env.PADDLE_DESK2_BALANCE_BASE_CURRENCY || "USD",
-      balanceBaseCutoffIso: "2026-07-02T10:14:00Z",
-      successfulPaymentsBaseCount: 10,
-      refundsAllTimeAmount: Math.max(Number(process.env.PADDLE_DESK2_REFUNDS_ALL_TIME_AMOUNT || 0), 6159.22),
-      refundsAllTimeCurrency: process.env.PADDLE_DESK2_REFUNDS_ALL_TIME_CURRENCY || "USD",
-    };
-  }
+function siteById(siteId: unknown) {
+  return sites().find((site) => site.id === siteId);
+}
 
-  if (id === DESK3_CHAT_ID) {
-    return {
-      apiKey: process.env.PADDLE_DESK3_API_KEY || "",
-      title: "JolliesTime",
-      balanceBaseAmount: Number(process.env.PADDLE_DESK3_BALANCE_BASE_AMOUNT || 0),
-      balanceBaseCurrency: process.env.PADDLE_DESK3_BALANCE_BASE_CURRENCY || "USD",
-      balanceBaseCutoffIso: process.env.PADDLE_DESK3_BALANCE_BASE_CUTOFF_ISO || DEFAULT_BALANCE_BASE_CUTOFF_ISO,
-      successfulPaymentsBaseCount: Number(process.env.PADDLE_DESK3_SUCCESSFUL_PAYMENTS_BASE_COUNT || 0),
-      refundsAllTimeAmount: Number(process.env.PADDLE_DESK3_REFUNDS_ALL_TIME_AMOUNT || 0),
-      refundsAllTimeCurrency: process.env.PADDLE_DESK3_REFUNDS_ALL_TIME_CURRENCY || "USD",
-    };
-  }
+function productById(site: SiteConfig, productId: unknown) {
+  return site.products.find((product) => product.id === productId);
+}
 
+function mainMenuKeyboard() {
   return {
-    apiKey: "",
-    title: `Unknown chat ${id}`,
-    balanceBaseAmount: 0,
-    balanceBaseCurrency: "USD",
-    balanceBaseCutoffIso: DEFAULT_BALANCE_BASE_CUTOFF_ISO,
-    successfulPaymentsBaseCount: 0,
-    refundsAllTimeAmount: 0,
-    refundsAllTimeCurrency: "USD",
+    inline_keyboard: [[{ text: "Create payment link", callback_data: "menu_create_link" }]],
   };
 }
 
-function kyivDateKey(value: string | null | undefined) {
-  if (!value) return "";
-
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(value));
-}
-
-function formatMoney(amount: unknown, currency: unknown) {
-  const value = Number(amount || 0) / 100;
-  return `${value.toFixed(2)} ${String(currency || "EUR")}`;
-}
-
-function formatDecimalMoney(amount: unknown, currency: unknown) {
-  return `${Number(amount || 0).toFixed(2)} ${String(currency || "USD")}`;
-}
-
-function parsePaddleDate(value: unknown) {
-  const normalized = String(value || "")
-    .replace(" ", "T")
-    .replace(" Z", "Z");
-
-  return new Date(normalized);
-}
-
-function minorToMajor(amount: unknown) {
-  return Number(amount || 0) / 100;
-}
-
-function transactionNetAmount(transaction: any) {
-  const payoutTotals = transaction.details?.payout_totals || transaction.details?.adjusted_payout_totals;
-  const totals = transaction.details?.totals;
-
-  if (payoutTotals?.earnings !== undefined && payoutTotals?.earnings !== null) {
-    return {
-      amount: Number(payoutTotals.earnings),
-      currency: payoutTotals.currency_code || transaction.currency_code || totals?.currency_code || "EUR",
-    };
-  }
-
-  if (totals?.fee !== undefined && totals?.fee !== null) {
-    return {
-      amount: Number(totals.grand_total || totals.total || 0) - Number(totals.fee || 0),
-      currency: totals.currency_code || transaction.currency_code || "EUR",
-    };
-  }
-
+function siteKeyboard() {
   return {
-    amount: Number(totals?.grand_total || totals?.total || 0),
-    currency: totals?.currency_code || transaction.currency_code || "EUR",
+    inline_keyboard: sites().map((site) => [
+      { text: site.label, callback_data: `site:${site.id}` },
+    ]),
   };
 }
 
-async function fetchAddress(transaction: any, apiKey: string) {
-  const customerId = transaction.customer_id;
-  const addressId = transaction.address_id;
-
-  if (!apiKey || !customerId || !addressId) {
-    return { country: "unknown", postalCode: "" };
-  }
-
-  try {
-    const res = await fetch(`https://api.paddle.com/customers/${customerId}/addresses/${addressId}`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-      cache: "no-store",
-    });
-
-    if (!res.ok) {
-      return { country: "unknown", postalCode: "" };
-    }
-
-    const json = await res.json();
-
-    return {
-      country: json.data?.country_code || "unknown",
-      postalCode: json.data?.postal_code || json.data?.zip_code || "",
-    };
-  } catch {
-    return { country: "unknown", postalCode: "" };
-  }
-}
-
-async function fetchTodayTransactions(apiKey: string) {
-  if (!apiKey) return [];
-
-  const today = kyivDateKey(new Date().toISOString());
-  let url = "https://api.paddle.com/transactions?per_page=100&order_by=created_at[DESC]";
-  const transactions: any[] = [];
-
-  for (let page = 0; page < 5 && url; page += 1) {
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-      cache: "no-store",
-    });
-
-    if (!res.ok) break;
-
-    const json = await res.json();
-    const pageTransactions = Array.isArray(json.data) ? json.data : [];
-
-    for (const transaction of pageTransactions) {
-      const dateForReport = transaction.billed_at || transaction.created_at;
-      const status = String(transaction.status || "").toLowerCase();
-
-      if (kyivDateKey(dateForReport) === today && SUCCESS_STATUSES.has(status)) {
-        transactions.push(transaction);
-      }
-    }
-
-    const oldest = pageTransactions[pageTransactions.length - 1];
-    if (oldest && kyivDateKey(oldest.created_at) !== today) break;
-
-    url = json.meta?.pagination?.has_more ? json.meta.pagination.next : "";
-  }
-
-  return transactions;
-}
-
-async function paddleGet(apiKey: string, path: string) {
-  const res = await fetch(`https://api.paddle.com${path}`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-    cache: "no-store",
-  });
-
-  if (!res.ok) {
-    throw new Error(`Paddle API error ${res.status}`);
-  }
-
-  return res.json();
-}
-
-async function fetchNewSuccessfulTransactions(apiKey: string, cutoff: Date) {
-  if (!apiKey) return [];
-
-  let url = "/transactions?per_page=100&order_by=created_at[DESC]";
-  const transactions: any[] = [];
-
-  for (let page = 0; page < 20 && url; page += 1) {
-    const json = await paddleGet(apiKey, url);
-    const pageTransactions = Array.isArray(json.data) ? json.data : [];
-
-    for (const transaction of pageTransactions) {
-      const dateForBalance = parsePaddleDate(transaction.billed_at || transaction.updated_at || transaction.created_at);
-      const status = String(transaction.status || "").toLowerCase();
-
-      if (dateForBalance > cutoff && SUCCESS_STATUSES.has(status)) {
-        transactions.push(transaction);
-      }
-    }
-
-    const oldest = pageTransactions[pageTransactions.length - 1];
-    if (oldest && parsePaddleDate(oldest.created_at) <= cutoff) break;
-
-    url = json.meta?.pagination?.has_more ? json.meta.pagination.next : "";
-  }
-
-  return transactions;
-}
-
-function adjustmentSign(adjustment: any) {
-  const action = String(adjustment.action || adjustment.type || "").toLowerCase();
-
-  if (action.includes("reverse")) return 1;
-  if (action.includes("refund") || action.includes("chargeback") || action.includes("credit")) return -1;
-
-  return -1;
-}
-
-function adjustmentNetAmount(adjustment: any) {
-  const payoutTotals = adjustment.payout_totals || adjustment.adjusted_payout_totals;
-  const totals = adjustment.totals || adjustment.adjusted_totals;
-  const amount =
-    payoutTotals?.earnings ??
-    payoutTotals?.total ??
-    totals?.earnings ??
-    totals?.grand_total ??
-    totals?.total ??
-    0;
-
+function productKeyboard(site: SiteConfig) {
   return {
-    amount: adjustmentSign(adjustment) * Math.abs(Number(amount || 0)),
-    currency: payoutTotals?.currency_code || totals?.currency_code || adjustment.currency_code || "USD",
+    inline_keyboard: [
+      ...site.products.map((product) => [
+        { text: `${product.name} - ${product.price}`, callback_data: `product:${product.id}` },
+      ]),
+      [{ text: "Back to site choice", callback_data: "menu_create_link" }],
+    ],
   };
 }
 
-async function fetchNewBalanceAdjustments(apiKey: string, cutoff: Date) {
-  if (!apiKey) return [];
-
-  let url = "/adjustments?per_page=50";
-  const adjustments: any[] = [];
-
-  for (let page = 0; page < 20 && url; page += 1) {
-    const json = await paddleGet(apiKey, url);
-    const pageAdjustments = Array.isArray(json.data) ? json.data : [];
-
-    for (const adjustment of pageAdjustments) {
-      const dateForBalance = parsePaddleDate(adjustment.updated_at || adjustment.created_at);
-      const status = String(adjustment.status || "").toLowerCase();
-
-      if (dateForBalance > cutoff && (!status || status === "approved" || status === "reversed")) {
-        adjustments.push(adjustment);
-      }
-    }
-
-    const oldest = pageAdjustments[pageAdjustments.length - 1];
-    if (oldest && parsePaddleDate(oldest.created_at) <= cutoff) break;
-
-    url = json.meta?.pagination?.has_more ? json.meta.pagination.next : "";
-  }
-
-  return adjustments;
-}
-
-async function buildTodayReport(account: StatsAccount) {
-  const transactions = await fetchTodayTransactions(account.apiKey);
-  const totals = new Map<string, number>();
-  const lines: string[] = [];
-
-  for (const transaction of transactions) {
-    const { amount, currency } = transactionNetAmount(transaction);
-    totals.set(currency, (totals.get(currency) || 0) + amount);
-    const email = transaction.customer?.email || transaction.customer_email || transaction.custom_data?.email || "unknown";
-
-    lines.push(`- ${tg(email)}`);
-  }
-
-  const totalText =
-    [...totals.entries()]
-      .map(([currency, amount]) => formatMoney(amount, currency))
-      .join(", ") || "0.00 EUR";
-
-  const date = new Intl.DateTimeFormat("en-GB", {
-    timeZone: TIME_ZONE,
-    dateStyle: "short",
-  }).format(new Date());
-
-  const body = lines.length ? lines.join("\n") : "No successful payments today.";
-  const report = `<b>${tg(account.title)} - Today (${tg(date)})</b>
-
-Total after Paddle fee: <b>${tg(totalText)}</b>
-
-${body}`;
-
-  return report.length > 3900 ? `${report.slice(0, 3800)}\n\n...truncated` : report;
-}
-
-async function buildBalanceReport(account: StatsAccount) {
-  const fallbackReport = (note = "") => {
-    const refundsText = account.refundsAllTimeAmount
-      ? `\nRefunds all time: <b>${tg(formatDecimalMoney(account.refundsAllTimeAmount, account.refundsAllTimeCurrency))}</b>`
-      : "";
-    const noteText = note ? `\n${tg(note)}` : "";
-
-    return `<b>${tg(account.title)} - Balance</b>
-
-Currently in Paddle balance: <b>${tg(formatDecimalMoney(account.balanceBaseAmount, account.balanceBaseCurrency))}</b>
-New successful payments: <b>${tg(account.successfulPaymentsBaseCount)}</b>${refundsText}${noteText}`;
+function countryKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "Germany", callback_data: "country:DE" },
+        { text: "Spain", callback_data: "country:ES" },
+      ],
+      [
+        { text: "France", callback_data: "country:FR" },
+        { text: "Italy", callback_data: "country:IT" },
+      ],
+      [
+        { text: "Netherlands", callback_data: "country:NL" },
+        { text: "United Kingdom", callback_data: "country:GB" },
+      ],
+      [
+        { text: "United States", callback_data: "country:US" },
+        { text: "Other country code", callback_data: "country:OTHER" },
+      ],
+    ],
   };
-
-  if (!account.apiKey) {
-    return fallbackReport();
-  }
-
-  try {
-    const totals = new Map<string, number>();
-    const cutoff = new Date(account.balanceBaseCutoffIso);
-    const transactions = await fetchNewSuccessfulTransactions(account.apiKey, cutoff);
-    const adjustments = await fetchNewBalanceAdjustments(account.apiKey, cutoff);
-
-    totals.set(account.balanceBaseCurrency, account.balanceBaseAmount);
-
-    for (const transaction of transactions) {
-      const { amount, currency } = transactionNetAmount(transaction);
-      totals.set(currency, (totals.get(currency) || 0) + minorToMajor(amount));
-    }
-
-    for (const adjustment of adjustments) {
-      const { amount, currency } = adjustmentNetAmount(adjustment);
-      totals.set(currency, (totals.get(currency) || 0) + minorToMajor(amount));
-    }
-
-    const totalText =
-      [...totals.entries()]
-        .map(([currency, amount]) => formatDecimalMoney(amount, currency))
-        .join(", ") || "0.00 USD";
-    const successfulAllTime = account.successfulPaymentsBaseCount + transactions.length;
-    const refundsText = account.refundsAllTimeAmount
-      ? `\nRefunds all time: <b>${tg(formatDecimalMoney(account.refundsAllTimeAmount, account.refundsAllTimeCurrency))}</b>`
-      : "";
-
-    return `<b>${tg(account.title)} - Balance</b>
-
-Currently in Paddle balance: <b>${tg(totalText)}</b>
-New successful payments: <b>${tg(successfulAllTime)}</b>${refundsText}`;
-  } catch (error) {
-    return fallbackReport();
-  }
 }
 
-async function sendTelegram(chatId: string | number, text: string) {
-  const botToken = process.env.TELEGRAM_DESK1_BOT_TOKEN;
+async function telegram(method: string, body: unknown) {
+  const botToken = getBotToken();
+  if (!botToken) return null;
 
-  if (!botToken) return;
-
-  await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+  return fetch(`https://api.telegram.org/bot${botToken}/${method}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-      parse_mode: "HTML",
-      disable_web_page_preview: true,
-    }),
+    body: JSON.stringify(body),
   });
 }
 
-function buildJolliesTestMessages() {
-  const date = new Intl.DateTimeFormat("en-GB", {
-    timeZone: TIME_ZONE,
-    dateStyle: "short",
-    timeStyle: "medium",
-  }).format(new Date());
-  const icon = {
-    website: "\u{1F310}",
-    email: "\u{1F464}",
-    product: "\u{1F4E6}",
-    amount: "\u{1F4B0}",
-    payment: "\u{1F4B3}",
-    country: "\u{1F30D}",
-    error: "\u{26A0}\u{FE0F}",
-    reason: "\u{1F4DD}",
-    id: "\u{1F9FE}",
-    date: "\u{1F552}",
+async function configureTelegramCommands() {
+  if (commandsConfigured) return;
+  commandsConfigured = true;
+
+  await telegram("setMyCommands", {
+    commands: [{ command: "start", description: "Open payment link menu" }],
+  });
+}
+
+async function sendTelegram(chatId: string | number, text: string, replyMarkup?: unknown) {
+  await telegram("sendMessage", {
+    chat_id: chatId,
+    text,
+    parse_mode: "HTML",
+    disable_web_page_preview: true,
+    ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+  });
+}
+
+async function answerCallback(callbackId: string, text = "") {
+  await telegram("answerCallbackQuery", {
+    callback_query_id: callbackId,
+    text,
+  });
+}
+
+async function paddlePost(apiKey: string, path: string, body: unknown) {
+  const res = await fetch(`https://api.paddle.com${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    throw new Error(data?.error?.detail || data?.error?.message || `Paddle API error ${res.status}`);
+  }
+
+  return data;
+}
+
+async function createCustomerAddress(site: SiteConfig, email: string, country: string, postalCode: string) {
+  if (!country) return {};
+
+  const customer = await paddlePost(site.apiKey, "/customers", { email });
+  const customerId = customer.data?.id;
+
+  if (!customerId) throw new Error("Paddle customer was not created");
+
+  const addressPayload: Record<string, string> = { country_code: country };
+  if (postalCode) addressPayload.postal_code = postalCode;
+
+  const address = await paddlePost(site.apiKey, `/customers/${customerId}/addresses`, addressPayload);
+  const addressId = address.data?.id;
+
+  if (!addressId) throw new Error("Paddle address was not created");
+
+  return { customer_id: customerId, address_id: addressId };
+}
+
+async function createPaymentLink(input: {
+  site: SiteConfig;
+  product: Product;
+  email: string;
+  country: string;
+  postalCode: string;
+}) {
+  if (!input.site.apiKey) throw new Error(`Missing Paddle API key for ${input.site.label}`);
+
+  const customerAddress = await createCustomerAddress(
+    input.site,
+    input.email,
+    input.country,
+    input.postalCode,
+  );
+  const transaction = await paddlePost(input.site.apiKey, "/transactions", {
+    items: [{ price_id: input.product.priceId, quantity: 1 }],
+    ...(customerAddress.customer_id ? customerAddress : { customer: { email: input.email } }),
+    custom_data: {
+      productId: input.product.id,
+      email: input.email,
+      country: input.country || undefined,
+      postalCode: input.postalCode || undefined,
+      sourceDomain: input.site.domain,
+      sourceDesk: input.site.id,
+      createdBy: "telegram-bot",
+    },
+    checkout: {
+      url: `${input.site.siteUrl}/checkout`,
+    },
+  });
+
+  return {
+    url: transaction.data?.checkout?.url,
+    transactionId: transaction.data?.id,
   };
+}
 
-  return [
-    `<b>TEST / EXAMPLE - PADDLE PAYMENT SUCCESSFUL</b>
+async function sendMenu(chatId: string | number) {
+  await sendTelegram(
+    chatId,
+    `<b>Payment link menu</b>
 
-${icon.website} <b>Website:</b> jolliestime.space
+Choose what to create. The customer will open the link from their own device, so Paddle will see the customer's real IP.`,
+    mainMenuKeyboard(),
+  );
+}
 
-${icon.email} <b>Email:</b> customer@example.com
-${icon.product} <b>Product:</b> Advanced Practice Vault
-${icon.amount} <b>Amount:</b> 250.00 EUR
-${icon.payment} <b>Payment:</b> card
-${icon.country} <b>Country:</b> DE ZIP: 54292
-${icon.id} <b>ID:</b> txn_test_jollies_success
-${icon.date} <b>Date:</b> ${tg(date)}`,
-    `<b>TEST / EXAMPLE - PADDLE PAYMENT FAILED</b>
+async function sendLink(chatId: string | number, userId: string, postalCodeInput: string) {
+  const session = linkSessions.get(userId);
+  const site = siteById(session?.siteId);
+  const product = site ? productById(site, session?.productId) : undefined;
 
-${icon.website} <b>Website:</b> jolliestime.space
+  if (!session?.email || !session.country || !site || !product) {
+    linkSessions.delete(userId);
+    await sendTelegram(chatId, "Session expired. Start again from the menu.", mainMenuKeyboard());
+    return;
+  }
 
-${icon.email} <b>Email:</b> customer@example.com
-${icon.product} <b>Product:</b> Advanced Practice Vault
-${icon.amount} <b>Amount:</b> 250.00 EUR
-${icon.payment} <b>Payment:</b> card
-${icon.country} <b>Country:</b> DE ZIP: 54292
-${icon.error} <b>Error:</b> authentication_failed
-${icon.reason} <b>Reason:</b> 3DS authentication failed. Customer completed the bank verification challenge, but it was not successful.
-${icon.id} <b>ID:</b> txn_test_jollies_failed
-${icon.date} <b>Date:</b> ${tg(date)}`,
-  ];
+  const postalCode = postalCodeInput === "-" ? "" : postalCodeInput.trim().slice(0, 32);
+  await sendTelegram(chatId, "Creating Paddle checkout link...");
+
+  try {
+    const result = await createPaymentLink({
+      site,
+      product,
+      email: session.email,
+      country: session.country,
+      postalCode,
+    });
+
+    if (!result.url) throw new Error("Paddle did not return checkout URL");
+
+    await sendTelegram(
+      chatId,
+      `<b>Payment link ready</b>
+
+Site: <b>${tg(site.label)}</b>
+Domain: <b>${tg(site.domain)}</b>
+Product: <b>${tg(product.name)}</b>
+Email: <b>${tg(session.email)}</b>
+Country: <b>${tg(session.country)}</b>
+ZIP: <b>${tg(postalCode || "not set")}</b>
+Transaction: <code>${tg(result.transactionId || "unknown")}</code>
+
+${tg(result.url)}`,
+    );
+  } catch (error) {
+    await sendTelegram(chatId, `Could not create link: ${tg(error instanceof Error ? error.message : "unknown error")}`);
+  } finally {
+    linkSessions.delete(userId);
+    await sendMenu(chatId);
+  }
+}
+
+async function handleCallback(callback: any) {
+  const callbackId = callback?.id;
+  const data = String(callback?.data || "");
+  const chatId = callback?.message?.chat?.id;
+  const userId = String(callback?.from?.id || "");
+
+  if (!chatId || !userId) return;
+
+  await answerCallback(callbackId);
+
+  if (data === "menu_create_link") {
+    linkSessions.set(userId, { step: "site" });
+    await sendTelegram(chatId, "Choose site / desk:", siteKeyboard());
+    return;
+  }
+
+  if (data.startsWith("site:")) {
+    const siteId = data.split(":")[1] as SiteConfig["id"];
+    const site = siteById(siteId);
+
+    if (!site) {
+      await sendTelegram(chatId, "Unknown site. Start again.", mainMenuKeyboard());
+      return;
+    }
+
+    linkSessions.set(userId, { siteId, step: "product" });
+    await sendTelegram(chatId, `Selected: <b>${tg(site.label)}</b>\n\nChoose product:`, productKeyboard(site));
+    return;
+  }
+
+  if (data.startsWith("product:")) {
+    const session = linkSessions.get(userId);
+    const site = siteById(session?.siteId);
+    const product = site ? productById(site, data.split(":")[1]) : undefined;
+
+    if (!session || !site || !product) {
+      linkSessions.delete(userId);
+      await sendTelegram(chatId, "Session expired. Start again.", mainMenuKeyboard());
+      return;
+    }
+
+    linkSessions.set(userId, { ...session, productId: product.id, step: "email" });
+    await sendTelegram(
+      chatId,
+      `Selected:
+Site: <b>${tg(site.label)}</b>
+Product: <b>${tg(product.name)} - ${tg(product.price)}</b>
+
+Send customer email.`,
+    );
+    return;
+  }
+
+  if (data.startsWith("country:")) {
+    const selected = data.split(":")[1];
+    const session = linkSessions.get(userId);
+
+    if (!session?.siteId || !session.productId || !session.email) {
+      linkSessions.delete(userId);
+      await sendTelegram(chatId, "Session expired. Start again.", mainMenuKeyboard());
+      return;
+    }
+
+    if (selected === "OTHER") {
+      linkSessions.set(userId, { ...session, step: "country" });
+      await sendTelegram(chatId, "Send 2-letter country code, for example DE, ES, FR, NL.");
+      return;
+    }
+
+    linkSessions.set(userId, { ...session, country: selected, step: "postal" });
+    await sendTelegram(chatId, `Country: <b>${tg(selected)}</b>\n\nSend ZIP/postal code. If no ZIP, send <code>-</code>.`);
+  }
+}
+
+async function handleText(chatId: string | number, chatType: string, userId: string, text: string) {
+  const command = text.split(/\s+/)[0].split("@")[0].toLowerCase();
+
+  if (command === "/start" || command === "/help" || text === "menu" || text === "Menu") {
+    linkSessions.delete(userId);
+    await sendMenu(chatId);
+    return true;
+  }
+
+  if (command === "/cancel" || text.toLowerCase() === "cancel") {
+    linkSessions.delete(userId);
+    await sendTelegram(chatId, "Cancelled.", mainMenuKeyboard());
+    return true;
+  }
+
+  if (command.startsWith("/") && command !== "/start" && command !== "/help" && command !== "/cancel") {
+    await sendMenu(chatId);
+    return true;
+  }
+
+  const session = linkSessions.get(userId);
+
+  if (!session) {
+    if (chatType === "private") {
+      await sendMenu(chatId);
+      return true;
+    }
+
+    return false;
+  }
+
+  if (session.step === "email") {
+    if (!isEmail(text)) {
+      await sendTelegram(chatId, "Email looks wrong. Send a valid customer email.");
+      return true;
+    }
+
+    linkSessions.set(userId, { ...session, email: text, step: "country" });
+    await sendTelegram(chatId, "Choose billing country for Paddle checkout:", countryKeyboard());
+    return true;
+  }
+
+  if (session.step === "country") {
+    const country = normalizeCountry(text);
+
+    if (!country) {
+      await sendTelegram(chatId, "Send a 2-letter country code, for example DE, ES, FR, NL.");
+      return true;
+    }
+
+    linkSessions.set(userId, { ...session, country, step: "postal" });
+    await sendTelegram(chatId, `Country: <b>${tg(country)}</b>\n\nSend ZIP/postal code. If no ZIP, send <code>-</code>.`);
+    return true;
+  }
+
+  if (session.step === "postal") {
+    await sendLink(chatId, userId, text);
+    return true;
+  }
+
+  await sendMenu(chatId);
+  return true;
 }
 
 export async function POST(req: Request) {
+  await configureTelegramCommands();
+
   const update = await req.json().catch(() => null);
+
+  if (update?.callback_query) {
+    await handleCallback(update.callback_query);
+    return new Response("OK", { status: 200 });
+  }
+
   const message = update?.message || update?.edited_message;
   const chatId = message?.chat?.id;
-  const text = String(message?.text || "").trim().split(/\s+/)[0].split("@")[0].toLowerCase();
+  const chatType = String(message?.chat?.type || "");
+  const userId = String(message?.from?.id || chatId || "");
+  const text = String(message?.text || "").trim();
 
   if (!chatId) {
     return new Response("OK", { status: 200 });
   }
 
-  const account = getAccountForChat(chatId);
-
-  if (text === "/id") {
-    await sendTelegram(
-      chatId,
-      `<b>Chat ID</b>
-
-${tg(chatId)}
-${message?.chat?.title ? `\n${tg(message.chat.title)}` : ""}`
-    );
-    return new Response("OK", { status: 200 });
-  }
-
-  if (text === "/testjollies") {
-    for (const testMessage of buildJolliesTestMessages()) {
-      await sendTelegram(chatId, testMessage);
-    }
-    return new Response("OK", { status: 200 });
-  }
-
-  if (text === "/today") {
-    await sendTelegram(chatId, await buildTodayReport(account));
-    return new Response("OK", { status: 200 });
-  }
-
-  if (text === "/balance") {
-    await sendTelegram(chatId, await buildBalanceReport(account));
-    return new Response("OK", { status: 200 });
-  }
-
-  if (text === "/help" || text === "/start") {
-    await sendTelegram(chatId, "Commands: /today, /balance, /id, /testjollies");
-  }
+  await handleText(chatId, chatType, userId, text);
 
   return new Response("OK", { status: 200 });
 }
