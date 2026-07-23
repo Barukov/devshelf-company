@@ -27,6 +27,7 @@ type LinkSession = {
 
 const linkSessions = new Map<string, LinkSession>();
 let commandsConfigured = false;
+const TELEGRAM_TIMEOUT_MS = 2500;
 
 const HOLYTIME_PRODUCTS: Product[] = [
   { id: "product161", name: "Professional Learning Pack", price: "161 EUR", priceId: "pri_01ksg1ychgaeytf7yfftmrs99r" },
@@ -158,11 +159,43 @@ async function telegram(method: string, body: unknown) {
   const botToken = getBotToken();
   if (!botToken) return null;
 
-  return fetch(`https://api.telegram.org/bot${botToken}/${method}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TELEGRAM_TIMEOUT_MS);
+
+  try {
+    return await fetch(`https://api.telegram.org/bot${botToken}/${method}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    console.error(`Telegram ${method} failed`, error);
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function quickTelegram(method: string, body: unknown) {
+  const botToken = getBotToken();
+  if (!botToken) return;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 900);
+
+  try {
+    await fetch(`https://api.telegram.org/bot${botToken}/${method}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch {
+    // Callback acknowledgements are best-effort; the real menu is sent separately.
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function configureTelegramCommands() {
@@ -185,7 +218,9 @@ async function sendTelegram(chatId: string | number, text: string, replyMarkup?:
 }
 
 async function answerCallback(callbackId: string, text = "") {
-  await telegram("answerCallbackQuery", {
+  if (!callbackId) return;
+
+  await quickTelegram("answerCallbackQuery", {
     callback_query_id: callbackId,
     text,
   });
@@ -462,8 +497,6 @@ async function handleText(chatId: string | number, chatType: string, userId: str
 }
 
 export async function POST(req: Request) {
-  await configureTelegramCommands();
-
   const update = await req.json().catch(() => null);
 
   if (update?.callback_query) {
@@ -479,6 +512,10 @@ export async function POST(req: Request) {
 
   if (!chatId) {
     return new Response("OK", { status: 200 });
+  }
+
+  if (text === "/start" || text === "/help") {
+    await configureTelegramCommands();
   }
 
   await handleText(chatId, chatType, userId, text);
